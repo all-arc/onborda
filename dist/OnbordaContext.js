@@ -1,6 +1,6 @@
 "use client";
 import { jsx as _jsx } from "react/jsx-runtime";
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useMemo } from "react";
 // Example Hooks Usage:
 // const { setCurrentStep, closeOnborda, startOnborda } = useOnborda();
 // // To trigger a specific step
@@ -41,13 +41,21 @@ const OnbordaProvider = ({ children, }) => {
         setCurrentStepState(0);
         setOnbordaVisible(true);
     }, []);
-    return (_jsx(OnbordaContext.Provider, { value: {
-            currentTour,
-            currentStep,
-            setCurrentStep,
-            closeOnborda,
-            startOnborda,
-            isOnbordaVisible,
-        }, children: children }));
+    const contextValue = useMemo(() => ({
+        currentTour,
+        currentStep,
+        setCurrentStep,
+        closeOnborda,
+        startOnborda,
+        isOnbordaVisible,
+    }), [
+        closeOnborda,
+        currentStep,
+        currentTour,
+        isOnbordaVisible,
+        setCurrentStep,
+        startOnborda,
+    ]);
+    return (_jsx(OnbordaContext.Provider, { value: contextValue, children: children }));
 };
 export { OnbordaProvider, useOnborda };

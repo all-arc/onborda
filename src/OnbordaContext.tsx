@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
 
 // Types
 import { OnbordaContextType } from "./types";
@@ -54,17 +54,27 @@ const OnbordaProvider: React.FC<{ children: React.ReactNode }> = ({
     setOnbordaVisible(true);
   }, []);
 
+  const contextValue = useMemo(
+    () => ({
+      currentTour,
+      currentStep,
+      setCurrentStep,
+      closeOnborda,
+      startOnborda,
+      isOnbordaVisible,
+    }),
+    [
+      closeOnborda,
+      currentStep,
+      currentTour,
+      isOnbordaVisible,
+      setCurrentStep,
+      startOnborda,
+    ]
+  );
+
   return (
-    <OnbordaContext.Provider
-      value={{
-        currentTour,
-        currentStep,
-        setCurrentStep,
-        closeOnborda,
-        startOnborda,
-        isOnbordaVisible,
-      }}
-    >
+    <OnbordaContext.Provider value={contextValue}>
       {children}
     </OnbordaContext.Provider>
   );

@@ -1,20 +1,81 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useOnborda } from "./OnbordaContext";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";
 import {
+  FloatingFocusManager,
   useFloating,
   offset as floatingOffset,
   flip,
   shift,
   arrow,
-  autoUpdate
+  autoUpdate,
+  type Placement,
 } from "@floating-ui/react";
 
 // Types
 import { OnbordaProps } from "./types";
+
+type TargetRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type SavedElementStyle = {
+  element: HTMLElement;
+  position: string;
+  zIndex: string;
+};
+
+const offset = 20;
+
+const placementMap: Record<string, Placement> = {
+  "top": "top",
+  "bottom": "bottom",
+  "left": "left",
+  "right": "right",
+  "top-left": "top-start",
+  "top-right": "top-end",
+  "bottom-left": "bottom-start",
+  "bottom-right": "bottom-end",
+  "right-top": "right-start",
+  "right-bottom": "right-end",
+  "left-top": "left-start",
+  "left-bottom": "left-end",
+};
+
+const isEditableElement = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+
+  const tagName = target.tagName.toLowerCase();
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    target.isContentEditable
+  );
+};
+
+const getElementRect = (element: Element): TargetRect => {
+  const { top, left, width, height } = element.getBoundingClientRect();
+  return {
+    x: left,
+    y: top,
+    width,
+    height,
+  };
+};
 
 const Onborda: React.FC<OnbordaProps> = ({
   children,
@@ -31,51 +92,41 @@ const Onborda: React.FC<OnbordaProps> = ({
 }) => {
   const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda } =
     useOnborda();
-  const currentTourSteps = steps.find(
-    (tour) => tour.tour === currentTour
-  )?.steps;
+  const currentTourSteps = useMemo(
+    () => steps.find((tour) => tour.tour === currentTour)?.steps,
+    [currentTour, steps]
+  );
+  const activeStep = currentTourSteps?.[currentStep];
 
-  const [pointerPosition, setPointerPosition] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const [pointerPosition, setPointerPosition] = useState<TargetRect | null>(null);
 
   const currentElementRef = useRef<HTMLElement | null>(null);
-  const resizeAnimationFrameRef = useRef<number | null>(null);
+  const savedElementStyleRef = useRef<SavedElementStyle | null>(null);
   const mutationObserverRef = useRef<MutationObserver | null>(null);
   const mutationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const arrowRef = useRef<SVGSVGElement | null>(null);
-  const offset = 20;
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const wasVisibleRef = useRef(false);
+  const maskId = useId();
 
   // Route Changes
   const router = useRouter();
 
-  // Floating UI Setup
-  const side = currentTourSteps?.[currentStep]?.side || "bottom";
-  const placementMap: Record<string, string> = {
-    "top": "top",
-    "bottom": "bottom",
-    "left": "left",
-    "right": "right",
-    "top-left": "top-start",
-    "top-right": "top-end",
-    "bottom-left": "bottom-start",
-    "bottom-right": "bottom-end",
-    "right-top": "right-start",
-    "right-bottom": "right-end",
-    "left-top": "left-start",
-    "left-bottom": "left-end",
-  };
-  const placement = (placementMap[side] || "bottom") as any;
+  const updatePointerPosition = useCallback((element: Element | null = currentElementRef.current) => {
+    if (!element) {
+      setPointerPosition(null);
+      return;
+    }
 
-  const { refs, floatingStyles, middlewareData, placement: finalPlacement } = useFloating({
-    placement,
-    whileElementsMounted: autoUpdate,
-    open: isOnbordaVisible && !!pointerPosition,
-    middleware: [
+    setPointerPosition(getElementRect(element));
+  }, []);
+
+  // Floating UI Setup
+  const placement = activeStep?.side ? placementMap[activeStep.side] : "bottom";
+
+  const floatingMiddleware = useMemo(
+    () => [
       floatingOffset(25),
       flip({
         fallbackPlacements: ["bottom", "top", "right", "left"],
@@ -83,48 +134,154 @@ const Onborda: React.FC<OnbordaProps> = ({
       shift({ padding: 10 }),
       arrow({ element: arrowRef }),
     ],
+    []
+  );
+
+  const { refs, floatingStyles, middlewareData, placement: finalPlacement, context } = useFloating({
+    placement,
+    whileElementsMounted: (reference, floating, update) =>
+      autoUpdate(reference, floating, () => {
+        update();
+        if (reference instanceof Element) {
+          updatePointerPosition(reference);
+        }
+      }),
+    open: isOnbordaVisible && !!activeStep,
+    middleware: floatingMiddleware,
   });
 
-  // Helper function to get element position
-  const getElementPosition = (element: Element) => {
-    const { top, left, width, height } = element.getBoundingClientRect();
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
-    return {
-      x: left + scrollLeft,
-      y: top + scrollTop,
-      width,
-      height,
-    };
-  };
-
-  // Safe wrapper to update pointer position
-  const updatePointerPosition = () => {
-    if (currentTourSteps) {
-      const step = currentTourSteps[currentStep];
-      if (step) {
-        const element = document.querySelector(step.selector);
-        if (element) {
-          setPointerPosition(getElementPosition(element));
-        }
-      }
+  const cleanupMutationObserver = useCallback(() => {
+    if (mutationObserverRef.current) {
+      mutationObserverRef.current.disconnect();
+      mutationObserverRef.current = null;
     }
-  };
+    if (mutationTimeoutRef.current) {
+      clearTimeout(mutationTimeoutRef.current);
+      mutationTimeoutRef.current = null;
+    }
+  }, []);
+
+  const restoreActiveElementStyle = useCallback(() => {
+    const savedStyle = savedElementStyleRef.current;
+    if (!savedStyle) return;
+
+    savedStyle.element.style.position = savedStyle.position;
+    savedStyle.element.style.zIndex = savedStyle.zIndex;
+    savedElementStyleRef.current = null;
+  }, []);
+
+  const applyActiveElementStyle = useCallback(
+    (element: HTMLElement) => {
+      if (!interact) return;
+
+      const savedStyle = savedElementStyleRef.current;
+      if (savedStyle?.element !== element) {
+        restoreActiveElementStyle();
+        savedElementStyleRef.current = {
+          element,
+          position: element.style.position,
+          zIndex: element.style.zIndex,
+        };
+      }
+
+      const computedPosition = window.getComputedStyle(element).position;
+      if (computedPosition === "static") {
+        element.style.position = "relative";
+      }
+      element.style.zIndex = "990";
+    },
+    [interact, restoreActiveElementStyle]
+  );
+
+  const clearActiveElement = useCallback(() => {
+    restoreActiveElementStyle();
+    currentElementRef.current = null;
+    setPointerPosition(null);
+    refs.setReference(null);
+  }, [refs, restoreActiveElementStyle]);
+
+  const scrollElementIntoView = useCallback((element: Element) => {
+    const rect = element.getBoundingClientRect();
+    const isInViewport =
+      rect.top >= -offset &&
+      rect.left >= -offset &&
+      rect.bottom <= window.innerHeight + offset &&
+      rect.right <= window.innerWidth + offset;
+
+    if (!isInViewport) {
+      element.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }
+  }, []);
+
+  const syncActiveElement = useCallback(() => {
+    if (!isOnbordaVisible || !activeStep) {
+      clearActiveElement();
+      return;
+    }
+
+    const element = document.querySelector(activeStep.selector) as HTMLElement | null;
+    if (!element) {
+      clearActiveElement();
+      return;
+    }
+
+    if (currentElementRef.current !== element) {
+      restoreActiveElementStyle();
+    }
+
+    currentElementRef.current = element;
+    applyActiveElementStyle(element);
+    refs.setReference(element);
+    updatePointerPosition(element);
+    scrollElementIntoView(element);
+  }, [
+    activeStep,
+    applyActiveElementStyle,
+    clearActiveElement,
+    isOnbordaVisible,
+    refs,
+    restoreActiveElementStyle,
+    scrollElementIntoView,
+    updatePointerPosition,
+  ]);
+
+  const scrollToElement = useCallback(
+    (stepIndex: number) => {
+      if (!currentTourSteps) return;
+
+      const element = document.querySelector(currentTourSteps[stepIndex].selector);
+      if (!element) {
+        setPointerPosition(null);
+        return;
+      }
+
+      scrollElementIntoView(element);
+      updatePointerPosition(element);
+    },
+    [currentTourSteps, scrollElementIntoView, updatePointerPosition]
+  );
 
   // Lifecycle wrappers
-  const handleComplete = () => {
+  const handleComplete = useCallback(() => {
     if (currentTour) {
       if (onTourComplete) onTourComplete(currentTour);
     }
+    cleanupMutationObserver();
     closeOnborda();
-  };
+  }, [cleanupMutationObserver, closeOnborda, currentTour, onTourComplete]);
 
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     if (currentTour) {
       if (onTourSkip) onTourSkip(currentTour, currentStep);
     }
+    cleanupMutationObserver();
     closeOnborda();
-  };
+  }, [cleanupMutationObserver, closeOnborda, currentStep, currentTour, onTourSkip]);
+
+  const handleClose = useCallback(() => {
+    cleanupMutationObserver();
+    closeOnborda();
+  }, [cleanupMutationObserver, closeOnborda]);
 
   // 1. Lifecycle Hook: onTourStart
   const tourStartedRef = useRef<string | null>(null);
@@ -153,101 +310,16 @@ const Onborda: React.FC<OnbordaProps> = ({
     }
   }, [currentStep, currentTour, currentTourSteps, isOnbordaVisible, onStepChange]);
 
-  // Unified Effect for target element tracking, styles, and initial scroll
+  // Target element tracking and initial scroll
   useEffect(() => {
-    if (isOnbordaVisible && currentTourSteps) {
-      // 1. Reset styles for all non-active elements
-      currentTourSteps.forEach((tourStep) => {
-        const element = document.querySelector(tourStep.selector) as HTMLElement | null;
-        if (element && tourStep !== currentTourSteps[currentStep]) {
-          if (interact) {
-            element.style.position = '';
-            element.style.zIndex = '';
-          }
-        }
-      });
-
-      // 2. Set up current active element
-      const step = currentTourSteps[currentStep];
-      if (step) {
-        const element = document.querySelector(step.selector) as HTMLElement | null;
-        if (element) {
-          element.style.position = 'relative';
-          if (interact) {
-            element.style.zIndex = '990';
-          }
-
-          // Set pointer position and track element
-          const position = getElementPosition(element);
-          setPointerPosition(position);
-          currentElementRef.current = element;
-          refs.setReference(element);
-
-          // Scroll into view if not fully inside viewport
-          const rect = element.getBoundingClientRect();
-          const isInViewport =
-            rect.top >= -offset && rect.bottom <= window.innerHeight + offset;
-
-          if (!isInViewport) {
-            element.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        } else {
-          setPointerPosition(null);
-          currentElementRef.current = null;
-          refs.setReference(null);
-        }
-      }
-    }
-
-    // Cleanup function for unmount or step changes
-    return () => {
-      if (currentTourSteps) {
-        currentTourSteps.forEach((step) => {
-          const element = document.querySelector(step.selector) as HTMLElement | null;
-          if (element && interact) {
-            element.style.position = '';
-            element.style.zIndex = '';
-          }
-        });
-      }
-    };
-  }, [currentStep, currentTourSteps, offset, isOnbordaVisible, interact, refs]);
-
-  // Effect for Throttled Resize, Scroll & ResizeObserver tracking
-  useEffect(() => {
-    const activeElement = currentElementRef.current;
-    if (!isOnbordaVisible || !activeElement) return;
-
-    const handleTracking = () => {
-      if (resizeAnimationFrameRef.current) {
-        cancelAnimationFrame(resizeAnimationFrameRef.current);
-      }
-      resizeAnimationFrameRef.current = requestAnimationFrame(() => {
-        updatePointerPosition();
-      });
-    };
-
-    // 1. Watch element size changes (ResizeObserver)
-    const resizeObserver = new ResizeObserver(() => {
-      handleTracking();
-    });
-    resizeObserver.observe(activeElement);
-
-    // 2. Watch window resize & scroll changes (capture scroll to support nested panels)
-    window.addEventListener("resize", handleTracking);
-    window.addEventListener("scroll", handleTracking, { capture: true, passive: true });
+    syncActiveElement();
 
     return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", handleTracking);
-      window.removeEventListener("scroll", handleTracking, { capture: true });
-      if (resizeAnimationFrameRef.current) {
-        cancelAnimationFrame(resizeAnimationFrameRef.current);
-      }
+      restoreActiveElementStyle();
     };
-  }, [currentStep, currentTourSteps, isOnbordaVisible]);
+  }, [syncActiveElement, restoreActiveElementStyle]);
 
-  // keydown navigation hook & Focus Trap focus setter
+  // keydown navigation hook
   useEffect(() => {
     if (!isOnbordaVisible) return;
 
@@ -258,15 +330,14 @@ const Onborda: React.FC<OnbordaProps> = ({
           handleSkip();
           break;
         case "ArrowRight":
+          if (isEditableElement(e.target)) return;
           e.preventDefault();
           nextStep();
           break;
         case "ArrowLeft":
+          if (isEditableElement(e.target)) return;
           e.preventDefault();
           prevStep();
-          break;
-        case "Tab":
-          handleFocusTrap(e);
           break;
         default:
           break;
@@ -275,189 +346,147 @@ const Onborda: React.FC<OnbordaProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOnbordaVisible, currentStep, currentTourSteps]);
+  });
 
-  // Focus trap implementation
-  const handleFocusTrap = (e: KeyboardEvent) => {
-    if (!cardRef.current) return;
-    const focusableElements = cardRef.current.querySelectorAll(
-      'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex="0"], [contenteditable]'
-    );
-    const firstElement = focusableElements[0] as HTMLElement;
-    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-
-    if (focusableElements.length === 0) {
-      e.preventDefault();
-      return;
-    }
-
-    if (e.shiftKey) {
-      if (document.activeElement === firstElement) {
-        lastElement.focus();
-        e.preventDefault();
-      }
-    } else {
-      if (document.activeElement === lastElement) {
-        firstElement.focus();
-        e.preventDefault();
-      }
-    }
-  };
-
-  // Auto focus card on mount/step change
+  // Track the element that had focus before the tour opened and restore it on close.
   useEffect(() => {
-    if (isOnbordaVisible && cardRef.current) {
-      const focusableElements = cardRef.current.querySelectorAll(
-        'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex="0"], [contenteditable]'
-      );
-      if (focusableElements.length > 0) {
-        (focusableElements[0] as HTMLElement).focus();
-      }
-    }
-  }, [currentStep, isOnbordaVisible]);
+    if (!isOnbordaVisible) {
+      const handleFocusIn = (event: FocusEvent) => {
+        if (event.target instanceof HTMLElement) {
+          returnFocusRef.current = event.target;
+        }
+      };
 
-  // Clean up mutation observers and timers on unmount
+      document.addEventListener("focusin", handleFocusIn);
+      return () => document.removeEventListener("focusin", handleFocusIn);
+    }
+  }, [isOnbordaVisible]);
+
+  useEffect(() => {
+    if (wasVisibleRef.current && !isOnbordaVisible) {
+      returnFocusRef.current?.focus();
+    }
+    wasVisibleRef.current = isOnbordaVisible;
+  }, [isOnbordaVisible]);
+
+  // Clean up mutation observers, timers, and target styles on unmount
   useEffect(() => {
     return () => {
-      if (mutationObserverRef.current) {
-        mutationObserverRef.current.disconnect();
-      }
-      if (mutationTimeoutRef.current) {
-        clearTimeout(mutationTimeoutRef.current);
-      }
+      cleanupMutationObserver();
+      restoreActiveElementStyle();
     };
-  }, []);
+  }, [cleanupMutationObserver, restoreActiveElementStyle]);
 
-  // Step Controls
-  const nextStep = async () => {
-    if (currentTourSteps) {
-      if (currentStep < currentTourSteps.length - 1) {
-        try {
-          const nextStepIndex = currentStep + 1;
-          const route = currentTourSteps[currentStep].nextRoute;
+  const waitForRouteTarget = useCallback(
+    (stepIndex: number) => {
+      if (!currentTourSteps) return;
 
-          if (mutationObserverRef.current) {
-            mutationObserverRef.current.disconnect();
-          }
-          if (mutationTimeoutRef.current) {
-            clearTimeout(mutationTimeoutRef.current);
-          }
+      const targetSelector = currentTourSteps[stepIndex].selector;
 
-          if (route) {
-            await router.push(route);
+      const showStep = () => {
+        setCurrentStep(stepIndex);
+        scrollToElement(stepIndex);
+      };
 
-            const targetSelector = currentTourSteps[nextStepIndex].selector;
-
-            const observer = new MutationObserver((mutations, obs) => {
-              const element = document.querySelector(targetSelector);
-              if (element) {
-                if (mutationTimeoutRef.current) {
-                  clearTimeout(mutationTimeoutRef.current);
-                }
-                setCurrentStep(nextStepIndex);
-                scrollToElement(nextStepIndex);
-                obs.disconnect();
-                mutationObserverRef.current = null;
-              }
-            });
-
-            mutationObserverRef.current = observer;
-            observer.observe(document.body, {
-              childList: true,
-              subtree: true,
-            });
-
-            // 5-second safeguard timeout
-            mutationTimeoutRef.current = setTimeout(() => {
-              console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
-              observer.disconnect();
-              mutationObserverRef.current = null;
-            }, 5000);
-          } else {
-            setCurrentStep(nextStepIndex);
-            scrollToElement(nextStepIndex);
-          }
-        } catch (error) {
-          console.error("Error navigating to next route", error);
-        }
-      } else {
-        handleComplete();
+      if (document.querySelector(targetSelector)) {
+        showStep();
+        return;
       }
-    }
-  };
 
-  const prevStep = async () => {
-    if (currentTourSteps && currentStep > 0) {
-      try {
-        const prevStepIndex = currentStep - 1;
-        const route = currentTourSteps[currentStep].prevRoute;
+      const observer = new MutationObserver((_, obs) => {
+        if (!document.querySelector(targetSelector)) return;
 
-        if (mutationObserverRef.current) {
-          mutationObserverRef.current.disconnect();
-          mutationObserverRef.current = null;
-        }
         if (mutationTimeoutRef.current) {
           clearTimeout(mutationTimeoutRef.current);
           mutationTimeoutRef.current = null;
         }
+        showStep();
+        obs.disconnect();
+        mutationObserverRef.current = null;
+      });
+
+      cleanupMutationObserver();
+      mutationObserverRef.current = observer;
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      // 5-second safeguard timeout
+      mutationTimeoutRef.current = setTimeout(() => {
+        console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
+        observer.disconnect();
+        mutationObserverRef.current = null;
+        mutationTimeoutRef.current = null;
+        setCurrentStep(stepIndex);
+      }, 5000);
+    },
+    [cleanupMutationObserver, currentTourSteps, scrollToElement, setCurrentStep]
+  );
+
+  // Step Controls
+  const nextStep = useCallback(async () => {
+    if (!currentTourSteps) return;
+
+    if (currentStep < currentTourSteps.length - 1) {
+      try {
+        const nextStepIndex = currentStep + 1;
+        const route = currentTourSteps[currentStep].nextRoute;
+
+        cleanupMutationObserver();
 
         if (route) {
           await router.push(route);
-
-          const targetSelector = currentTourSteps[prevStepIndex].selector;
-
-          const observer = new MutationObserver((mutations, obs) => {
-            const element = document.querySelector(targetSelector);
-            if (element) {
-              if (mutationTimeoutRef.current) {
-                clearTimeout(mutationTimeoutRef.current);
-              }
-              setCurrentStep(prevStepIndex);
-              scrollToElement(prevStepIndex);
-              obs.disconnect();
-              mutationObserverRef.current = null;
-            }
-          });
-
-          mutationObserverRef.current = observer;
-          observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-          });
-
-          // 5-second safeguard timeout
-          mutationTimeoutRef.current = setTimeout(() => {
-            console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
-            observer.disconnect();
-            mutationObserverRef.current = null;
-          }, 5000);
+          waitForRouteTarget(nextStepIndex);
         } else {
-          setCurrentStep(prevStepIndex);
-          scrollToElement(prevStepIndex);
+          setCurrentStep(nextStepIndex);
+          scrollToElement(nextStepIndex);
         }
       } catch (error) {
-        console.error("Error navigating to previous route", error);
+        console.error("Error navigating to next route", error);
       }
+    } else {
+      handleComplete();
     }
-  };
+  }, [
+    cleanupMutationObserver,
+    currentStep,
+    currentTourSteps,
+    handleComplete,
+    router,
+    scrollToElement,
+    setCurrentStep,
+    waitForRouteTarget,
+  ]);
 
-  // Scroll to the correct element when the step changes
-  const scrollToElement = (stepIndex: number) => {
-    if (currentTourSteps) {
-      const element = document.querySelector(
-        currentTourSteps[stepIndex].selector
-      ) as Element | null;
-      if (element) {
-        const { top } = element.getBoundingClientRect();
-        const isInViewport =
-          top >= -offset && top <= window.innerHeight + offset;
-        if (!isInViewport) {
-          element.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-        setPointerPosition(getElementPosition(element));
+  const prevStep = useCallback(async () => {
+    if (!currentTourSteps || currentStep <= 0) return;
+
+    try {
+      const prevStepIndex = currentStep - 1;
+      const route = currentTourSteps[currentStep].prevRoute;
+
+      cleanupMutationObserver();
+
+      if (route) {
+        await router.push(route);
+        waitForRouteTarget(prevStepIndex);
+      } else {
+        setCurrentStep(prevStepIndex);
+        scrollToElement(prevStepIndex);
       }
+    } catch (error) {
+      console.error("Error navigating to previous route", error);
     }
-  };
+  }, [
+    cleanupMutationObserver,
+    currentStep,
+    currentTourSteps,
+    router,
+    scrollToElement,
+    setCurrentStep,
+    waitForRouteTarget,
+  ]);
 
   // Dynamic SVG arrow position based on final floating placement
   const getArrowStyle = (placement: string) => {
@@ -515,15 +544,23 @@ const Onborda: React.FC<OnbordaProps> = ({
         data-name="onborda-arrow"
         className="absolute w-6 h-6 origin-center"
         style={getArrowStyle(finalPlacement)}
+        aria-hidden="true"
       >
         <path id="triangle" d="M27 27L0 0V54L27 27Z" fill="currentColor" />
       </svg>
     );
   };
 
-  const pointerPadding = currentTourSteps?.[currentStep]?.pointerPadding ?? 30;
+  const pointerPadding = activeStep?.pointerPadding ?? 30;
   const pointerPadOffset = pointerPadding / 2;
-  const pointerRadius = currentTourSteps?.[currentStep]?.pointerRadius ?? 28;
+  const pointerRadius = activeStep?.pointerRadius ?? 28;
+  const targetFound = !!pointerPosition;
+  const fallbackFloatingStyles = {
+    position: "fixed" as const,
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+  };
 
   return (
     <div
@@ -535,7 +572,7 @@ const Onborda: React.FC<OnbordaProps> = ({
         {children}
       </div>
 
-      {pointerPosition && isOnbordaVisible && CardComponent && (
+      {isOnbordaVisible && activeStep && CardComponent && (
         <Portal>
           {!interact && (
             <div className="fixed inset-0 z-[890]" onClick={handleSkip} />
@@ -548,29 +585,32 @@ const Onborda: React.FC<OnbordaProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
+            aria-hidden="true"
           >
             <defs>
-              <mask id="onborda-spotlight-mask">
+              <mask id={maskId}>
                 <rect width="100%" height="100%" fill="white" />
-                {currentTourSteps?.[currentStep]?.spotlightShape === "circle" ? (
-                  <motion.circle
-                    cx={pointerPosition.x - window.scrollX + pointerPosition.width / 2}
-                    cy={pointerPosition.y - window.scrollY + pointerPosition.height / 2}
-                    r={Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset}
-                    fill="black"
-                    transition={cardTransition}
-                  />
-                ) : (
-                  <motion.rect
-                    x={pointerPosition.x - window.scrollX - pointerPadOffset}
-                    y={pointerPosition.y - window.scrollY - pointerPadOffset}
-                    width={pointerPosition.width + pointerPadding}
-                    height={pointerPosition.height + pointerPadding}
-                    rx={pointerRadius}
-                    ry={pointerRadius}
-                    fill="black"
-                    transition={cardTransition}
-                  />
+                {pointerPosition && (
+                  activeStep.spotlightShape === "circle" ? (
+                    <motion.circle
+                      cx={pointerPosition.x + pointerPosition.width / 2}
+                      cy={pointerPosition.y + pointerPosition.height / 2}
+                      r={Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset}
+                      fill="black"
+                      transition={cardTransition}
+                    />
+                  ) : (
+                    <motion.rect
+                      x={pointerPosition.x - pointerPadOffset}
+                      y={pointerPosition.y - pointerPadOffset}
+                      width={pointerPosition.width + pointerPadding}
+                      height={pointerPosition.height + pointerPadding}
+                      rx={pointerRadius}
+                      ry={pointerRadius}
+                      fill="black"
+                      transition={cardTransition}
+                    />
+                  )
                 )}
               </mask>
             </defs>
@@ -578,36 +618,53 @@ const Onborda: React.FC<OnbordaProps> = ({
               width="100%"
               height="100%"
               fill={`rgba(${shadowRgb}, ${shadowOpacity})`}
-              mask="url(#onborda-spotlight-mask)"
+              mask={`url(#${maskId})`}
               className="pointer-events-auto"
             />
           </motion.svg>
 
           {/* Floating UI Tooltip Card */}
-          <div
-            ref={refs.setFloating}
-            style={{
-              ...floatingStyles,
-              zIndex: 950,
-            }}
-            className="absolute flex flex-col pointer-events-auto"
-            data-name="onborda-card-wrapper"
+          <FloatingFocusManager
+            context={context}
+            modal={!interact}
+            initialFocus={0}
+            returnFocus={returnFocusRef}
+            restoreFocus={true}
+            closeOnFocusOut={false}
           >
             <div
-              ref={cardRef}
-              className="flex flex-col max-w-[100%] transition-all min-w-min"
-              data-name="onborda-card"
+              ref={refs.setFloating}
+              style={{
+                ...(targetFound ? floatingStyles : fallbackFloatingStyles),
+                zIndex: 950,
+              }}
+              className="absolute flex flex-col pointer-events-auto"
+              data-name="onborda-card-wrapper"
             >
-              <CardComponent
-                step={currentTourSteps?.[currentStep]!}
-                currentStep={currentStep}
-                totalSteps={currentTourSteps?.length ?? 0}
-                nextStep={nextStep}
-                prevStep={prevStep}
-                arrow={<CardArrow />}
-              />
+              <div
+                ref={cardRef}
+                className="flex flex-col max-w-[100%] transition-all min-w-min"
+                data-name="onborda-card"
+                role="dialog"
+                aria-label={activeStep.title}
+                tabIndex={-1}
+              >
+                <CardComponent
+                  step={activeStep}
+                  currentStep={currentStep}
+                  totalSteps={currentTourSteps?.length ?? 0}
+                  nextStep={nextStep}
+                  prevStep={prevStep}
+                  skipTour={handleSkip}
+                  closeOnborda={handleClose}
+                  isFirstStep={currentStep === 0}
+                  isLastStep={currentStep === (currentTourSteps?.length ?? 0) - 1}
+                  targetFound={targetFound}
+                  arrow={targetFound ? <CardArrow /> : null}
+                />
+              </div>
             </div>
-          </div>
+          </FloatingFocusManager>
         </Portal>
       )}
     </div>

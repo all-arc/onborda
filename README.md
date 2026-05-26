@@ -14,10 +14,11 @@ pnpm add onborda
 ### Global `layout.tsx`
 ```tsx
 import { OnbordaProvider, Onborda } from "onborda";
+import { CustomCard } from "@/components/CustomCard";
 
 // In your root layout component:
 <OnbordaProvider>
-  <Onborda steps={steps}>
+  <Onborda steps={steps} cardComponent={CustomCard}>
     {children}
   </Onborda>
 </OnbordaProvider>
@@ -30,9 +31,7 @@ Target anything in your app using the elements `id` attribute.
 ```
 
 ### Tailwind config
-Tailwind CSS will need to scan the node module in order to include the classes used. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
-
-> **Note**: You only require this if you are **not using** a custom component.
+Tailwind CSS will need to scan the node module in order to include the classes used by the overlay wrapper. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
 
 ```ts
 const config: Config = {
@@ -43,7 +42,7 @@ const config: Config = {
 ```
 
 ### Custom Card 
-If you require greater control over the card design or simply wish to create a totally custom component then you can do so easily.
+Onborda requires a custom card component. This keeps the library focused on positioning, spotlight, routing, and lifecycle behavior while giving you complete control over the card UI.
 
 | Prop          | Type             | Description                                                          |
 |---------------|------------------|----------------------------------------------------------------------|
@@ -52,7 +51,12 @@ If you require greater control over the card design or simply wish to create a t
 | `totalSteps`    | `number`         | The total number of steps in the onboarding process.                 |
 | `nextStep`      | `() => void`     | A function to advance to the next step in the onboarding process.    |
 | `prevStep`      | `() => void`     | A function to go back to the previous step in the onboarding process.|
-| `arrow`         | `ReactElement`   | Returns an SVG arrow element whose orientation is automatically controlled. |
+| `skipTour`      | `() => void`     | A function to skip the current tour and trigger `onTourSkip`. |
+| `closeOnborda`  | `() => void`     | A function to close the tour without firing the skip callback. |
+| `isFirstStep`   | `boolean`        | Indicates whether the current step is the first step. |
+| `isLastStep`    | `boolean`        | Indicates whether the current step is the last step. |
+| `targetFound`   | `boolean`        | Indicates whether the current selector matched an element. |
+| `arrow`         | `ReactElement \| null` | Returns an SVG arrow element when a target is found. It is `null` when the card is rendered in fallback mode. |
 
 ```tsx
 "use client"
@@ -64,16 +68,22 @@ export const CustomCard = ({
   totalSteps,
   nextStep,
   prevStep,
+  skipTour,
+  isFirstStep,
+  isLastStep,
+  targetFound,
   arrow,
 }: CardComponentProps) => {
   return (
-    <div>
+    <div aria-live="polite">
       <h1>{step.icon} {step.title}</h1>
       <h2>{currentStep + 1} of {totalSteps}</h2>
       <p>{step.content}</p>
-      <button onClick={prevStep}>Previous</button>
-      <button onClick={nextStep}>Next</button>
-      {arrow}
+      {!targetFound && <p>The highlighted element is not currently available.</p>}
+      <button onClick={prevStep} disabled={isFirstStep}>Previous</button>
+      <button onClick={nextStep}>{isLastStep ? "Finish" : "Next"}</button>
+      <button onClick={skipTour}>Skip</button>
+      {arrow ?? null}
     </div>
   )
 }
@@ -110,14 +120,14 @@ const steps: Tour[] = [
 | `content`        | `React.ReactNode`               | The main content or body of the step.                                                 |
 | `selector`       | `string`                        | A CSS selector string targeting the HTML element this step highlights (e.g. `#my-element`).            |
 | `side`           | `"top"` \| `"bottom"` \| `"left"` \| `"right"` \| `"top-left"` \| `"top-right"` \| `"bottom-left"` \| `"bottom-right"` \| `"left-top"` \| `"left-bottom"` \| `"right-top"` \| `"right-bottom"` | Optional. Determines where the tooltip should appear relative to the selector. Defaults to `"bottom"`. |
-| `showControls`   | `boolean`                       | Optional. Determines whether control buttons (next, prev) should be shown if using the default card.           |
+| `showControls`   | `boolean`                       | Optional metadata you can use inside your custom card component to decide whether controls should be shown.           |
 | `pointerPadding` | `number`                        | Optional. The padding around the spotlight (keyhole) highlighting the target element. Defaults to `30`. |
 | `pointerRadius`  | `number`                        | Optional. The border-radius of the spotlight highlighting the target element. Defaults to `28`. |
 | `spotlightShape` | `"rect"` \| `"circle"`          | Optional. Controls whether the spotlight cutout shape is a rectangle or circle. Defaults to `"rect"`. |
 | `nextRoute`      | `string`                        | Optional. The route to navigate to using `next/navigation` when moving to the next step.                      |
 | `prevRoute`      | `string`                        | Optional. The route to navigate to using `next/navigation` when moving to the previous step.                  |
 
-> **Note** _Both `nextRoute` and `prevRoute` have a `500`ms delay before setting the next step to allow for page transitions. Future versions will add controls to customize this delay._
+> **Note** _For `nextRoute` and `prevRoute`, Onborda waits for the next selector to appear after `router.push`. If it is not found within 5 seconds, the same card is rendered in fallback mode with `targetFound: false` and `arrow: null`._
 
 ### Example `steps`
 
@@ -169,10 +179,9 @@ export const steps: Tour[] = [
 | `children`      | `React.ReactNode`     | Your website or application content.                                                  |
 | `interact`      | `boolean`             | Optional. Controls whether the onboarding overlay should be interactive. Defaults to `false`. |
 | `steps`         | `Tour[]`              | An array of `Tour` objects defining each tour in your onboarding process.              |
-| `showOnborda`   | `boolean`             | Optional. Controls the visibility of the onboarding overlay, eg. if the user is a first time visitor. Defaults to `false`.                         |
 | `shadowRgb`     | `string`              | Optional. The RGB values for the shadow color surrounding the target area. Defaults to black `"0,0,0"`.      |
 | `shadowOpacity` | `string`              | Optional. The opacity value for the shadow surrounding the target area. Defaults to `"0.2"`          |
-| `cardComponent` | `ComponentType<CardComponentProps>` | Optional. A custom React component used to render the card/tooltip. |
+| `cardComponent` | `ComponentType<CardComponentProps>` | Required. A custom React component used to render the card/tooltip. |
 | `cardTransition`| `Transition`          | Transitions between steps. Accepts framer-motion `Transition` configurations. Example: `{{ type: "spring" }}`. |
 | `onTourStart`   | `(tour: string) => void` | Optional. Callback function triggered when a tour begins. |
 | `onStepChange`  | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered whenever the active step changes. |
@@ -182,7 +191,6 @@ export const steps: Tour[] = [
 ```tsx
 <Onborda
   steps={steps}
-  showOnborda={true}
   shadowRgb="55,48,163"
   shadowOpacity="0.8"
   cardComponent={CustomCard}
@@ -217,7 +225,6 @@ export default function RootLayout({
         <OnbordaProvider>
           <Onborda 
             steps={steps}
-            showOnborda={true} // Set to true/false dynamically or control via useOnborda hook
             cardComponent={CustomCard}
           >
             {children}
@@ -312,6 +319,7 @@ To prevent users from seeing the tour every time they visit, you can use the Onb
 "use client";
 
 import { OnbordaProvider, Onborda } from "onborda";
+import CustomCard from "@/components/CustomCard";
 import { steps } from "@/config/steps";
 import { updateUserTourCompletion } from "@/app/actions"; // Your Server Action
 
@@ -328,6 +336,7 @@ export default function RootLayout({ children }) {
         <OnbordaProvider>
           <Onborda 
             steps={steps}
+            cardComponent={CustomCard}
             onTourComplete={handleTourComplete}
           >
             {children}
@@ -338,4 +347,3 @@ export default function RootLayout({ children }) {
   );
 }
 ```
-

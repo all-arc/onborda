@@ -32,7 +32,7 @@ export interface OnbordaProps {
     shadowRgb?: string;
     shadowOpacity?: string;
     cardTransition?: Transition;
-    cardComponent?: React.ComponentType<CardComponentProps>;
+    cardComponent: React.ComponentType<CardComponentProps>;
     onTourStart?: (tour: string) => void;
     onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
     onTourComplete?: (tour: string) => void;
@@ -44,5 +44,10 @@ export interface CardComponentProps {
     totalSteps: number;
     nextStep: () => void;
     prevStep: () => void;
-    arrow: React.ReactElement;
+    skipTour: () => void;
+    closeOnborda: () => void;
+    isFirstStep: boolean;
+    isLastStep: boolean;
+    targetFound: boolean;
+    arrow?: React.ReactElement | null;
 }
