@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useOnborda } from "./OnbordaContext";
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";
 
@@ -23,81 +23,22 @@ const Onborda: React.FC<OnbordaProps> = ({
     (tour) => tour.tour === currentTour
   )?.steps;
 
-  const [elementToScroll, setElementToScroll] = useState<Element | null>(null);
   const [pointerPosition, setPointerPosition] = useState<{
     x: number;
     y: number;
     width: number;
     height: number;
   } | null>(null);
-  const currentElementRef = useRef<Element | null>(null);
-  const observeRef = useRef(null); // Ref for the observer element
-  const isInView = useInView(observeRef);
+
+  const currentElementRef = useRef<HTMLElement | null>(null);
+  const resizeAnimationFrameRef = useRef<number | null>(null);
+  const mutationObserverRef = useRef<MutationObserver | null>(null);
+  const mutationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const offset = 20;
 
-  // - -
   // Route Changes
   const router = useRouter();
 
-  // - -
-  // Initialisze
-  const previousElementRef = useRef<Element | null>(null);
-
-  useEffect(() => {
-    if (isOnbordaVisible && currentTourSteps) {
-      // Clean up all elements that might have our styles
-      currentTourSteps.forEach(tourStep => {
-        const element = document.querySelector(tourStep.selector) as HTMLElement | null;
-        if (element && tourStep !== currentTourSteps[currentStep]) {
-          // Reset styles for non-active elements if interaction is enabled
-          if (interact) {
-            const style = element.style;
-            style.position = '';
-            style.zIndex = '';
-          }
-        }
-      });
-
-      const step = currentTourSteps[currentStep];
-      if (step) {
-        const element = document.querySelector(step.selector) as Element | null;
-        if (element) {
-          // Set styles for current element
-          (element as HTMLElement).style.position = 'relative';
-          if (interact) {
-            (element as HTMLElement).style.zIndex = '990';
-          }
-
-          setPointerPosition(getElementPosition(element));
-          currentElementRef.current = element;
-          setElementToScroll(element);
-
-          const rect = element.getBoundingClientRect();
-          const isInViewportWithOffset =
-            rect.top >= -offset && rect.bottom <= window.innerHeight + offset;
-
-          if (!isInView || !isInViewportWithOffset) {
-            element.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }
-      }
-    }
-
-    // Cleanup function for component unmount
-    return () => {
-      if (currentTourSteps) {
-        currentTourSteps.forEach(step => {
-          const element = document.querySelector(step.selector) as HTMLElement | null;
-          if (element && interact) {
-            element.style.position = '';
-            element.style.zIndex = '';
-          }
-        });
-      }
-    };
-  }, [currentStep, currentTourSteps, isInView, offset, isOnbordaVisible, interact]);
-
-  // - -
   // Helper function to get element position
   const getElementPosition = (element: Element) => {
     const { top, left, width, height } = element.getBoundingClientRect();
@@ -111,51 +52,12 @@ const Onborda: React.FC<OnbordaProps> = ({
     };
   };
 
-  // - -
-  // Update pointerPosition when currentStep changes
-  useEffect(() => {
-    if (isOnbordaVisible && currentTourSteps) {
-      console.log("Onborda: Current Step Changed");
-      const step = currentTourSteps[currentStep];
-      if (step) {
-        const element = document.querySelector(step.selector) as Element | null;
-        if (element) {
-          setPointerPosition(getElementPosition(element));
-          currentElementRef.current = element;
-          setElementToScroll(element);
-
-          const rect = element.getBoundingClientRect();
-          const isInViewportWithOffset =
-            rect.top >= -offset && rect.bottom <= window.innerHeight + offset;
-
-          if (!isInView || !isInViewportWithOffset) {
-            element.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }
-      }
-    }
-  }, [currentStep, currentTourSteps, isInView, offset, isOnbordaVisible]);
-
-  useEffect(() => {
-    if (elementToScroll && !isInView && isOnbordaVisible) {
-      console.log("Onborda: Element to Scroll Changed");
-      const rect = elementToScroll.getBoundingClientRect();
-      const isAbove = rect.top < 0;
-      elementToScroll.scrollIntoView({
-        behavior: "smooth",
-        block: isAbove ? "center" : "center",
-        inline: "center",
-      });
-    }
-  }, [elementToScroll, isInView, isOnbordaVisible]);
-
-  // - -
-  // Update pointer position on window resize
+  // Safe wrapper to update pointer position
   const updatePointerPosition = () => {
     if (currentTourSteps) {
       const step = currentTourSteps[currentStep];
       if (step) {
-        const element = document.querySelector(step.selector) as Element | null;
+        const element = document.querySelector(step.selector);
         if (element) {
           setPointerPosition(getElementPosition(element));
         }
@@ -163,16 +65,108 @@ const Onborda: React.FC<OnbordaProps> = ({
     }
   };
 
-  // - -
-  // Update pointer position on window resize
+  // Unified Effect for target element tracking, styles, and initial scroll
   useEffect(() => {
-    if (isOnbordaVisible) {
-      window.addEventListener("resize", updatePointerPosition);
-      return () => window.removeEventListener("resize", updatePointerPosition);
+    if (isOnbordaVisible && currentTourSteps) {
+      // 1. Reset styles for all non-active elements
+      currentTourSteps.forEach((tourStep) => {
+        const element = document.querySelector(tourStep.selector) as HTMLElement | null;
+        if (element && tourStep !== currentTourSteps[currentStep]) {
+          if (interact) {
+            element.style.position = '';
+            element.style.zIndex = '';
+          }
+        }
+      });
+
+      // 2. Set up current active element
+      const step = currentTourSteps[currentStep];
+      if (step) {
+        const element = document.querySelector(step.selector) as HTMLElement | null;
+        if (element) {
+          element.style.position = 'relative';
+          if (interact) {
+            element.style.zIndex = '990';
+          }
+
+          // Set pointer position and track element
+          const position = getElementPosition(element);
+          setPointerPosition(position);
+          currentElementRef.current = element;
+
+          // Scroll into view if not fully inside viewport
+          const rect = element.getBoundingClientRect();
+          const isInViewport =
+            rect.top >= -offset && rect.bottom <= window.innerHeight + offset;
+
+          if (!isInViewport) {
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        } else {
+          setPointerPosition(null);
+          currentElementRef.current = null;
+        }
+      }
     }
+
+    // Cleanup function for unmount or step changes
+    return () => {
+      if (currentTourSteps) {
+        currentTourSteps.forEach((step) => {
+          const element = document.querySelector(step.selector) as HTMLElement | null;
+          if (element && interact) {
+            element.style.position = '';
+            element.style.zIndex = '';
+          }
+        });
+      }
+    };
+  }, [currentStep, currentTourSteps, offset, isOnbordaVisible, interact]);
+
+  // Effect for Throttled Resize & ResizeObserver tracking
+  useEffect(() => {
+    const activeElement = currentElementRef.current;
+    if (!isOnbordaVisible || !activeElement) return;
+
+    const handleTracking = () => {
+      if (resizeAnimationFrameRef.current) {
+        cancelAnimationFrame(resizeAnimationFrameRef.current);
+      }
+      resizeAnimationFrameRef.current = requestAnimationFrame(() => {
+        updatePointerPosition();
+      });
+    };
+
+    // 1. Watch element size changes (ResizeObserver)
+    const resizeObserver = new ResizeObserver(() => {
+      handleTracking();
+    });
+    resizeObserver.observe(activeElement);
+
+    // 2. Watch window resize changes
+    window.addEventListener("resize", handleTracking);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", handleTracking);
+      if (resizeAnimationFrameRef.current) {
+        cancelAnimationFrame(resizeAnimationFrameRef.current);
+      }
+    };
   }, [currentStep, currentTourSteps, isOnbordaVisible]);
 
-  // - -
+  // Clean up mutation observers and timers on unmount
+  useEffect(() => {
+    return () => {
+      if (mutationObserverRef.current) {
+        mutationObserverRef.current.disconnect();
+      }
+      if (mutationTimeoutRef.current) {
+        clearTimeout(mutationTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Step Controls
   const nextStep = async () => {
     if (currentTourSteps && currentStep < currentTourSteps.length - 1) {
@@ -180,29 +174,43 @@ const Onborda: React.FC<OnbordaProps> = ({
         const nextStepIndex = currentStep + 1;
         const route = currentTourSteps[currentStep].nextRoute;
 
+        if (mutationObserverRef.current) {
+          mutationObserverRef.current.disconnect();
+        }
+        if (mutationTimeoutRef.current) {
+          clearTimeout(mutationTimeoutRef.current);
+        }
+
         if (route) {
           await router.push(route);
 
           const targetSelector = currentTourSteps[nextStepIndex].selector;
 
-          // Use MutationObserver to detect when the target element is available in the DOM
-          const observer = new MutationObserver((mutations, observer) => {
+          const observer = new MutationObserver((mutations, obs) => {
             const element = document.querySelector(targetSelector);
             if (element) {
-              // Once the element is found, update the step and scroll to the element
+              if (mutationTimeoutRef.current) {
+                clearTimeout(mutationTimeoutRef.current);
+              }
               setCurrentStep(nextStepIndex);
               scrollToElement(nextStepIndex);
-
-              // Stop observing after the element is found
-              observer.disconnect();
+              obs.disconnect();
+              mutationObserverRef.current = null;
             }
           });
 
-          // Start observing the document body for changes
+          mutationObserverRef.current = observer;
           observer.observe(document.body, {
             childList: true,
             subtree: true,
           });
+
+          // 5-second safeguard timeout
+          mutationTimeoutRef.current = setTimeout(() => {
+            console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
+            observer.disconnect();
+            mutationObserverRef.current = null;
+          }, 5000);
         } else {
           setCurrentStep(nextStepIndex);
           scrollToElement(nextStepIndex);
@@ -219,29 +227,43 @@ const Onborda: React.FC<OnbordaProps> = ({
         const prevStepIndex = currentStep - 1;
         const route = currentTourSteps[currentStep].prevRoute;
 
+        if (mutationObserverRef.current) {
+          mutationObserverRef.current.disconnect();
+        }
+        if (mutationTimeoutRef.current) {
+          clearTimeout(mutationTimeoutRef.current);
+        }
+
         if (route) {
           await router.push(route);
 
           const targetSelector = currentTourSteps[prevStepIndex].selector;
 
-          // Use MutationObserver to detect when the target element is available in the DOM
-          const observer = new MutationObserver((mutations, observer) => {
+          const observer = new MutationObserver((mutations, obs) => {
             const element = document.querySelector(targetSelector);
             if (element) {
-              // Once the element is found, update the step and scroll to the element
+              if (mutationTimeoutRef.current) {
+                clearTimeout(mutationTimeoutRef.current);
+              }
               setCurrentStep(prevStepIndex);
               scrollToElement(prevStepIndex);
-
-              // Stop observing after the element is found
-              observer.disconnect();
+              obs.disconnect();
+              mutationObserverRef.current = null;
             }
           });
 
-          // Start observing the document body for changes
+          mutationObserverRef.current = observer;
           observer.observe(document.body, {
             childList: true,
             subtree: true,
           });
+
+          // 5-second safeguard timeout
+          mutationTimeoutRef.current = setTimeout(() => {
+            console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
+            observer.disconnect();
+            mutationObserverRef.current = null;
+          }, 5000);
         } else {
           setCurrentStep(prevStepIndex);
           scrollToElement(prevStepIndex);
@@ -252,7 +274,6 @@ const Onborda: React.FC<OnbordaProps> = ({
     }
   };
 
-  // - -
   // Scroll to the correct element when the step changes
   const scrollToElement = (stepIndex: number) => {
     if (currentTourSteps) {
@@ -266,7 +287,6 @@ const Onborda: React.FC<OnbordaProps> = ({
         if (!isInViewport) {
           element.scrollIntoView({ behavior: "smooth", block: "center" });
         }
-        // Update pointer position after scrolling
         setPointerPosition(getElementPosition(element));
       }
     }

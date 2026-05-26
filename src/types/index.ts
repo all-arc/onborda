@@ -53,5 +53,5 @@ export interface CardComponentProps {
   totalSteps: number;
   nextStep: () => void;
   prevStep: () => void;
-  arrow: JSX.Element;
+  arrow: React.ReactElement;
 }
