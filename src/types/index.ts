@@ -22,6 +22,7 @@ export interface Step {
   showControls?: boolean;
   pointerPadding?: number;
   pointerRadius?: number;
+  spotlightShape?: "rect" | "circle";
   // Routing
   nextRoute?: string;
   prevRoute?: string;
@@ -44,6 +45,11 @@ export interface OnbordaProps {
   shadowOpacity?: string;
   cardTransition?: Transition;
   cardComponent?: React.ComponentType<CardComponentProps>;
+  // Callbacks
+  onTourStart?: (tour: string) => void;
+  onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
+  onTourComplete?: (tour: string) => void;
+  onTourSkip?: (tour: string, currentStep: number) => void;
 }
 
 // Custom Card
