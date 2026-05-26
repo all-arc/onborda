@@ -7,12 +7,8 @@ Onborda is a lightweight onboarding flow that utilises [framer-motion](https://w
 
 ## Getting started
 ```bash
-# npm
-npm i onborda
 # pnpm
 pnpm add onborda
-# yarn
-yarn add onborda
 ```
 
 ### Global `layout.tsx`
