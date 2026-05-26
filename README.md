@@ -30,6 +30,23 @@ Target anything in your app using the elements `id` attribute.
 <div id="onborda-step1">Onboard Step</div>
 ```
 
+### Optimized imports
+The root import is convenient when you need both the overlay and the hook:
+
+```tsx
+import { Onborda, OnbordaProvider, useOnborda } from "onborda";
+```
+
+For smaller bundles, import only the part you need from a subpath:
+
+```tsx
+import { Onborda } from "onborda/onborda";
+import { OnbordaProvider, useOnborda } from "onborda/context";
+import type { CardComponentProps, Tour } from "onborda/types";
+```
+
+The package publishes ESM, explicit `exports`, and `sideEffects: false` so Next.js and other modern bundlers can remove unused exports.
+
 ### Tailwind config
 Tailwind CSS will need to scan the node module in order to include the classes used by the overlay wrapper. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
 

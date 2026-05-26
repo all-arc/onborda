@@ -1,7 +1,7 @@
 "use client";
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, } from "react";
-import { useOnborda } from "./OnbordaContext";
+import { useOnborda } from "./OnbordaContext.js";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";

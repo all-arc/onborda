@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
 
 // Types
-import { OnbordaContextType } from "./types";
+import { OnbordaContextType } from "./types/index.js";
 
 // Example Hooks Usage:
 // const { setCurrentStep, closeOnborda, startOnborda } = useOnborda();

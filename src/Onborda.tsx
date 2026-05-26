@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useOnborda } from "./OnbordaContext";
+import { useOnborda } from "./OnbordaContext.js";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";
@@ -23,7 +23,7 @@ import {
 } from "@floating-ui/react";
 
 // Types
-import { OnbordaProps } from "./types";
+import { OnbordaProps } from "./types/index.js";
 
 type TargetRect = {
   x: number;
