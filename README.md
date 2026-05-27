@@ -127,6 +127,30 @@ export function ControlledTour({ children }: { children: React.ReactNode }) {
 | `onOpenChange`             | `(open: boolean) => void`         | Called when Onborda requests an open/closed state change. |
 | `onStateChange`            | `(state: OnbordaState) => void`   | Called with the complete next state for each Onborda action. |
 
+### Target missing policy
+By default, if a step selector does not match an element, Onborda keeps the tour open and renders the same custom card in the center of the viewport with `targetFound: false` and `arrow: null`.
+
+Use `targetMissingPolicy` when a missing target should be handled automatically:
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  targetMissingPolicy="skip-step"
+  onTargetMissing={(tour, stepIndex, step) => {
+    console.warn(`Missing target for ${tour} step ${stepIndex}: ${step.selector}`);
+  }}
+>
+  {children}
+</Onborda>
+```
+
+| Policy        | Behavior |
+|---------------|----------|
+| `fallback`    | Default. Render the card in the viewport center and keep the tour recoverable. |
+| `skip-step`   | Skip the missing step. Next navigation skips forward; previous navigation skips backward. If there is no step to skip to, the tour completes when moving forward or skips when moving backward. |
+| `skip-tour`   | Call `onTargetMissing`, trigger the same skip flow as `skipTour`, and close the tour. |
+
 ### Tailwind config
 Tailwind CSS will need to scan the node module in order to include the classes used by the overlay wrapper. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
 
@@ -280,8 +304,10 @@ export const steps: Tour[] = [
 | `shadowOpacity` | `string`              | Optional. The opacity value for the shadow surrounding the target area. Defaults to `"0.2"`          |
 | `cardComponent` | `ComponentType<CardComponentProps>` | Required. A custom React component used to render the card/tooltip. |
 | `cardTransition`| `Transition`          | Transitions between steps. Accepts framer-motion `Transition` configurations. Example: `{{ type: "spring" }}`. |
+| `targetMissingPolicy` | `"fallback"` \| `"skip-step"` \| `"skip-tour"` | Optional. Controls what happens when the current step selector does not match an element. Defaults to `"fallback"`. |
 | `onTourStart`   | `(tour: string) => void` | Optional. Callback function triggered when a tour begins. |
 | `onStepChange`  | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered whenever the active step changes. |
+| `onTargetMissing` | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered once when the current selector cannot be found. |
 | `onTourComplete`| `(tour: string) => void` | Optional. Callback function triggered when a tour has been successfully completed. |
 | `onTourSkip`    | `(tour: string, currentStep: number) => void` | Optional. Callback function triggered when the user skips or closes the tour. |
 

@@ -38,6 +38,8 @@ type SavedElementStyle = {
   zIndex: string;
 };
 
+type TargetStatus = "unknown" | "found" | "missing";
+
 const offset = 20;
 
 const placementMap: Record<string, Placement> = {
@@ -85,8 +87,10 @@ const Onborda: React.FC<OnbordaProps> = ({
   shadowOpacity = "0.2",
   cardTransition = { ease: "anticipate", duration: 0.6 },
   cardComponent: CardComponent,
+  targetMissingPolicy = "fallback",
   onTourStart,
   onStepChange,
+  onTargetMissing,
   onTourComplete,
   onTourSkip,
 }) => {
@@ -99,6 +103,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   const activeStep = currentTourSteps?.[currentStep];
 
   const [pointerPosition, setPointerPosition] = useState<TargetRect | null>(null);
+  const [targetStatus, setTargetStatus] = useState<TargetStatus>("unknown");
 
   const currentElementRef = useRef<HTMLElement | null>(null);
   const savedElementStyleRef = useRef<SavedElementStyle | null>(null);
@@ -108,6 +113,8 @@ const Onborda: React.FC<OnbordaProps> = ({
   const arrowRef = useRef<SVGSVGElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const wasVisibleRef = useRef(false);
+  const navigationDirectionRef = useRef<"forward" | "backward">("forward");
+  const lastMissingTargetRef = useRef<string | null>(null);
   const maskId = useId();
 
   // Route Changes
@@ -216,12 +223,14 @@ const Onborda: React.FC<OnbordaProps> = ({
   const syncActiveElement = useCallback(() => {
     if (!isOnbordaVisible || !activeStep) {
       clearActiveElement();
+      setTargetStatus("unknown");
       return;
     }
 
     const element = document.querySelector(activeStep.selector) as HTMLElement | null;
     if (!element) {
       clearActiveElement();
+      setTargetStatus("missing");
       return;
     }
 
@@ -232,6 +241,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     currentElementRef.current = element;
     applyActiveElementStyle(element);
     refs.setReference(element);
+    setTargetStatus("found");
     updatePointerPosition(element);
     scrollElementIntoView(element);
   }, [
@@ -433,6 +443,7 @@ const Onborda: React.FC<OnbordaProps> = ({
         const nextStepIndex = currentStep + 1;
         const route = currentTourSteps[currentStep].nextRoute;
 
+        navigationDirectionRef.current = "forward";
         cleanupMutationObserver();
 
         if (route) {
@@ -466,6 +477,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       const prevStepIndex = currentStep - 1;
       const route = currentTourSteps[currentStep].prevRoute;
 
+      navigationDirectionRef.current = "backward";
       cleanupMutationObserver();
 
       if (route) {
@@ -486,6 +498,73 @@ const Onborda: React.FC<OnbordaProps> = ({
     scrollToElement,
     setCurrentStep,
     waitForRouteTarget,
+  ]);
+
+  const skipMissingStep = useCallback(() => {
+    if (!currentTourSteps) return;
+
+    const stepOffset = navigationDirectionRef.current === "backward" ? -1 : 1;
+    const nextStepIndex = currentStep + stepOffset;
+
+    if (nextStepIndex >= 0 && nextStepIndex < currentTourSteps.length) {
+      setTargetStatus("unknown");
+      setCurrentStep(nextStepIndex);
+      scrollToElement(nextStepIndex);
+      return;
+    }
+
+    if (navigationDirectionRef.current === "forward") {
+      handleComplete();
+      return;
+    }
+
+    handleSkip();
+  }, [
+    currentStep,
+    currentTourSteps,
+    handleComplete,
+    handleSkip,
+    scrollToElement,
+    setCurrentStep,
+  ]);
+
+  useEffect(() => {
+    if (!isOnbordaVisible || !currentTour || !activeStep) {
+      lastMissingTargetRef.current = null;
+      return;
+    }
+
+    if (targetStatus !== "missing") {
+      if (targetStatus === "found") {
+        lastMissingTargetRef.current = null;
+      }
+      return;
+    }
+
+    const missingTargetKey = `${currentTour}:${currentStep}:${activeStep.selector}`;
+    if (lastMissingTargetRef.current === missingTargetKey) return;
+
+    lastMissingTargetRef.current = missingTargetKey;
+    onTargetMissing?.(currentTour, currentStep, activeStep);
+
+    if (targetMissingPolicy === "skip-step") {
+      skipMissingStep();
+      return;
+    }
+
+    if (targetMissingPolicy === "skip-tour") {
+      handleSkip();
+    }
+  }, [
+    activeStep,
+    currentStep,
+    currentTour,
+    handleSkip,
+    isOnbordaVisible,
+    onTargetMissing,
+    skipMissingStep,
+    targetMissingPolicy,
+    targetStatus,
   ]);
 
   // Dynamic SVG arrow position based on final floating placement
@@ -554,7 +633,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   const pointerPadding = activeStep?.pointerPadding ?? 30;
   const pointerPadOffset = pointerPadding / 2;
   const pointerRadius = activeStep?.pointerRadius ?? 28;
-  const targetFound = !!pointerPosition;
+  const targetFound = targetStatus === "found" && !!pointerPosition;
   const fallbackFloatingStyles = {
     position: "fixed" as const,
     top: "50%",

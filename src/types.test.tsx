@@ -5,6 +5,7 @@ import type {
   OnbordaProps,
   OnbordaProviderProps,
   OnbordaState,
+  TargetMissingPolicy,
 } from "./types";
 
 function Card(_: CardComponentProps) {
@@ -24,6 +25,8 @@ describe("public types", () => {
 
     expectTypeOf<OnbordaProps>().toMatchTypeOf<{
       cardComponent: React.ComponentType<CardComponentProps>;
+      targetMissingPolicy?: TargetMissingPolicy;
+      onTargetMissing?: OnbordaProps["onTargetMissing"];
     }>();
 
     const props = {

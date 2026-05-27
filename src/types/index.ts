@@ -55,6 +55,8 @@ export interface Tour {
   steps: Step[];
 }
 
+export type TargetMissingPolicy = "fallback" | "skip-step" | "skip-tour";
+
 // Onborda
 export interface OnbordaProps {
   children: React.ReactNode;
@@ -65,9 +67,11 @@ export interface OnbordaProps {
   shadowOpacity?: string;
   cardTransition?: Transition;
   cardComponent: React.ComponentType<CardComponentProps>;
+  targetMissingPolicy?: TargetMissingPolicy;
   // Callbacks
   onTourStart?: (tour: string) => void;
   onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
+  onTargetMissing?: (tour: string, stepIndex: number, step: Step) => void;
   onTourComplete?: (tour: string) => void;
   onTourSkip?: (tour: string, currentStep: number) => void;
 }

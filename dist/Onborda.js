@@ -39,11 +39,12 @@ const getElementRect = (element) => {
         height,
     };
 };
-const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, onTourStart, onStepChange, onTourComplete, onTourSkip, }) => {
+const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", onTourStart, onStepChange, onTargetMissing, onTourComplete, onTourSkip, }) => {
     const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda } = useOnborda();
     const currentTourSteps = useMemo(() => steps.find((tour) => tour.tour === currentTour)?.steps, [currentTour, steps]);
     const activeStep = currentTourSteps?.[currentStep];
     const [pointerPosition, setPointerPosition] = useState(null);
+    const [targetStatus, setTargetStatus] = useState("unknown");
     const currentElementRef = useRef(null);
     const savedElementStyleRef = useRef(null);
     const mutationObserverRef = useRef(null);
@@ -52,6 +53,8 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const arrowRef = useRef(null);
     const returnFocusRef = useRef(null);
     const wasVisibleRef = useRef(false);
+    const navigationDirectionRef = useRef("forward");
+    const lastMissingTargetRef = useRef(null);
     const maskId = useId();
     // Route Changes
     const router = useRouter();
@@ -138,11 +141,13 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const syncActiveElement = useCallback(() => {
         if (!isOnbordaVisible || !activeStep) {
             clearActiveElement();
+            setTargetStatus("unknown");
             return;
         }
         const element = document.querySelector(activeStep.selector);
         if (!element) {
             clearActiveElement();
+            setTargetStatus("missing");
             return;
         }
         if (currentElementRef.current !== element) {
@@ -151,6 +156,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         currentElementRef.current = element;
         applyActiveElementStyle(element);
         refs.setReference(element);
+        setTargetStatus("found");
         updatePointerPosition(element);
         scrollElementIntoView(element);
     }, [
@@ -331,6 +337,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             try {
                 const nextStepIndex = currentStep + 1;
                 const route = currentTourSteps[currentStep].nextRoute;
+                navigationDirectionRef.current = "forward";
                 cleanupMutationObserver();
                 if (route) {
                     await router.push(route);
@@ -364,6 +371,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         try {
             const prevStepIndex = currentStep - 1;
             const route = currentTourSteps[currentStep].prevRoute;
+            navigationDirectionRef.current = "backward";
             cleanupMutationObserver();
             if (route) {
                 await router.push(route);
@@ -385,6 +393,64 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         scrollToElement,
         setCurrentStep,
         waitForRouteTarget,
+    ]);
+    const skipMissingStep = useCallback(() => {
+        if (!currentTourSteps)
+            return;
+        const stepOffset = navigationDirectionRef.current === "backward" ? -1 : 1;
+        const nextStepIndex = currentStep + stepOffset;
+        if (nextStepIndex >= 0 && nextStepIndex < currentTourSteps.length) {
+            setTargetStatus("unknown");
+            setCurrentStep(nextStepIndex);
+            scrollToElement(nextStepIndex);
+            return;
+        }
+        if (navigationDirectionRef.current === "forward") {
+            handleComplete();
+            return;
+        }
+        handleSkip();
+    }, [
+        currentStep,
+        currentTourSteps,
+        handleComplete,
+        handleSkip,
+        scrollToElement,
+        setCurrentStep,
+    ]);
+    useEffect(() => {
+        if (!isOnbordaVisible || !currentTour || !activeStep) {
+            lastMissingTargetRef.current = null;
+            return;
+        }
+        if (targetStatus !== "missing") {
+            if (targetStatus === "found") {
+                lastMissingTargetRef.current = null;
+            }
+            return;
+        }
+        const missingTargetKey = `${currentTour}:${currentStep}:${activeStep.selector}`;
+        if (lastMissingTargetRef.current === missingTargetKey)
+            return;
+        lastMissingTargetRef.current = missingTargetKey;
+        onTargetMissing?.(currentTour, currentStep, activeStep);
+        if (targetMissingPolicy === "skip-step") {
+            skipMissingStep();
+            return;
+        }
+        if (targetMissingPolicy === "skip-tour") {
+            handleSkip();
+        }
+    }, [
+        activeStep,
+        currentStep,
+        currentTour,
+        handleSkip,
+        isOnbordaVisible,
+        onTargetMissing,
+        skipMissingStep,
+        targetMissingPolicy,
+        targetStatus,
     ]);
     // Dynamic SVG arrow position based on final floating placement
     const getArrowStyle = (placement) => {
@@ -437,7 +503,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const pointerPadding = activeStep?.pointerPadding ?? 30;
     const pointerPadOffset = pointerPadding / 2;
     const pointerRadius = activeStep?.pointerRadius ?? 28;
-    const targetFound = !!pointerPosition;
+    const targetFound = targetStatus === "found" && !!pointerPosition;
     const fallbackFloatingStyles = {
         position: "fixed",
         top: "50%",

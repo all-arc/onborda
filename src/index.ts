@@ -8,5 +8,6 @@ export type {
   OnbordaContextType,
   OnbordaState,
   OnbordaProviderProps,
+  TargetMissingPolicy,
   CardComponentProps,
 } from "./types/index.js";
