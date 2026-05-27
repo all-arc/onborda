@@ -2,6 +2,9 @@ import React from "react";
 import { describe, expectTypeOf, it } from "vitest";
 import type {
   CardComponentProps,
+  OnbordaAccessibilityContext,
+  OnbordaAccessibilityOptions,
+  OnbordaCardAccessibilityProps,
   OnbordaPersistedProgress,
   OnbordaProgressPersistence,
   OnbordaProgressStorage,
@@ -27,11 +30,13 @@ describe("public types", () => {
       isLastStep: boolean;
       targetFound: boolean;
       arrow?: React.ReactElement | null;
+      a11y: OnbordaCardAccessibilityProps;
     }>();
 
     expectTypeOf<OnbordaProps>().toMatchTypeOf<{
       cardComponent: React.ComponentType<CardComponentProps>;
       targetMissingPolicy?: TargetMissingPolicy;
+      accessibility?: OnbordaAccessibilityOptions;
       onTargetMissing?: OnbordaProps["onTargetMissing"];
       onRouteTransitionStart?: (transition: RouteTransition) => void;
       onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
@@ -89,5 +94,16 @@ describe("public types", () => {
         targetFound: boolean;
       }
     >();
+
+    expectTypeOf<OnbordaAccessibilityOptions>().toMatchTypeOf<{
+      dialogRole?: "dialog" | "alertdialog";
+      ariaLabel?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+      ariaLabelledBy?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+      ariaDescribedBy?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+      ariaModal?: boolean;
+      useCardLabelIds?: boolean;
+      progressText?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+      liveRegion?: "off" | "polite" | "assertive";
+    }>();
   });
 });

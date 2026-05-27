@@ -181,6 +181,7 @@ function TestCard({
   isLastStep,
   targetFound,
   arrow,
+  a11y,
 }: CardComponentProps) {
   return (
     <section>
@@ -190,6 +191,7 @@ function TestCard({
       <p>{isFirstStep ? "first-step" : "not-first-step"}</p>
       <p>{isLastStep ? "last-step" : "not-last-step"}</p>
       <p>{arrow ? "arrow-present" : "arrow-missing"}</p>
+      <p>{a11y.progressText}</p>
       <input aria-label="Card input" />
       <button type="button" onClick={prevStep}>
         Previous
@@ -203,6 +205,15 @@ function TestCard({
       <button type="button" onClick={closeOnborda}>
         Close
       </button>
+    </section>
+  );
+}
+
+function A11yCard({ step, a11y }: CardComponentProps) {
+  return (
+    <section>
+      <h2 {...a11y.titleProps}>{step.title}</h2>
+      <p {...a11y.descriptionProps}>Custom accessible description</p>
     </section>
   );
 }
@@ -399,6 +410,7 @@ describe("Onborda", () => {
     renderOnborda();
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+    expect(screen.getByText("Step 1 of 2")).toBeInTheDocument();
     expect(screen.getByText("target-found")).toBeInTheDocument();
     expect(screen.getByText("first-step")).toBeInTheDocument();
     expect(screen.getByText("not-last-step")).toBeInTheDocument();
@@ -557,6 +569,65 @@ describe("Onborda", () => {
     expect(onRouteTransitionComplete).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "First step" })).toBeInTheDocument();
     errorSpy.mockRestore();
+  });
+
+  it("supports custom dialog labeling through card accessibility ids", async () => {
+    render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda
+          steps={tours}
+          interact
+          cardComponent={A11yCard}
+          accessibility={{
+            dialogRole: "alertdialog",
+            ariaModal: true,
+            useCardLabelIds: true,
+            liveRegion: "polite",
+            progressText: ({ currentStep, totalSteps }) =>
+              `Progress ${currentStep + 1}/${totalSteps}`,
+          }}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    const dialog = await screen.findByRole("alertdialog", { name: "First step" });
+
+    expect(dialog).toHaveAccessibleDescription("Custom accessible description");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByText("Progress 1/2")).toBeInTheDocument();
+  });
+
+  it("supports custom aria-label and describedby resolvers", async () => {
+    render(
+      <OnbordaProvider>
+        <p id="external-description">External dialog description</p>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda
+          steps={tours}
+          interact
+          cardComponent={TestCard}
+          accessibility={{
+            ariaLabel: ({ step }) => `Tour step: ${step.title}`,
+            ariaDescribedBy: "external-description",
+          }}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Tour step: First step",
+    });
+
+    expect(dialog).toHaveAccessibleDescription("External dialog description");
   });
 
   it("does not navigate steps with arrow keys while typing in an input", async () => {

@@ -16,5 +16,9 @@ export type {
   RouteTransitionDirection,
   RouteTransition,
   RouteTransitionComplete,
+  OnbordaAccessibilityContext,
+  OnbordaA11yText,
+  OnbordaAccessibilityOptions,
+  OnbordaCardAccessibilityProps,
   CardComponentProps,
 } from "./types/index.js";

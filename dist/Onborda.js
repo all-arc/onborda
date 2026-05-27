@@ -39,7 +39,12 @@ const getElementRect = (element) => {
         height,
     };
 };
-const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onTourComplete, onTourSkip, }) => {
+const resolveA11yText = (value, context) => {
+    if (typeof value === "function")
+        return value(context);
+    return value;
+};
+const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onTourComplete, onTourSkip, }) => {
     const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda } = useOnborda();
     const currentTourSteps = useMemo(() => steps.find((tour) => tour.tour === currentTour)?.steps, [currentTour, steps]);
     const activeStep = currentTourSteps?.[currentStep];
@@ -56,6 +61,9 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const navigationDirectionRef = useRef("forward");
     const lastMissingTargetRef = useRef(null);
     const maskId = useId();
+    const dialogId = useId();
+    const titleId = useId();
+    const descriptionId = useId();
     // Route Changes
     const router = useRouter();
     const updatePointerPosition = useCallback((element = currentElementRef.current) => {
@@ -559,6 +567,54 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const pointerPadOffset = pointerPadding / 2;
     const pointerRadius = activeStep?.pointerRadius ?? 28;
     const targetFound = targetStatus === "found" && !!pointerPosition;
+    const totalSteps = currentTourSteps?.length ?? 0;
+    const isFirstStep = currentStep === 0;
+    const isLastStep = currentStep === totalSteps - 1;
+    const accessibilityContext = activeStep ? {
+        step: activeStep,
+        currentStep,
+        totalSteps,
+        currentTour,
+        isFirstStep,
+        isLastStep,
+        targetFound,
+    } : null;
+    const defaultProgressText = totalSteps > 0
+        ? `Step ${currentStep + 1} of ${totalSteps}`
+        : "";
+    const progressText = accessibilityContext
+        ? resolveA11yText(accessibility?.progressText, accessibilityContext) ?? defaultProgressText
+        : defaultProgressText;
+    const dialogRole = accessibility?.dialogRole ?? "dialog";
+    const ariaModal = accessibility?.ariaModal ?? !interact;
+    const resolvedLabelledBy = accessibilityContext
+        ? resolveA11yText(accessibility?.ariaLabelledBy, accessibilityContext)
+        : undefined;
+    const ariaLabelledBy = resolvedLabelledBy === undefined && accessibility?.useCardLabelIds
+        ? titleId
+        : resolvedLabelledBy ?? undefined;
+    const resolvedDescribedBy = accessibilityContext
+        ? resolveA11yText(accessibility?.ariaDescribedBy, accessibilityContext)
+        : undefined;
+    const ariaDescribedBy = resolvedDescribedBy === undefined && accessibility?.useCardLabelIds
+        ? descriptionId
+        : resolvedDescribedBy ?? undefined;
+    const ariaLabel = ariaLabelledBy || !accessibilityContext
+        ? undefined
+        : resolveA11yText(accessibility?.ariaLabel, accessibilityContext) ?? activeStep?.title;
+    const liveRegion = accessibility?.liveRegion ?? "off";
+    const cardA11y = {
+        dialogId,
+        titleId,
+        descriptionId,
+        progressText,
+        titleProps: {
+            id: titleId,
+        },
+        descriptionProps: {
+            id: descriptionId,
+        },
+    };
     const fallbackFloatingStyles = {
         position: "fixed",
         top: "50%",
@@ -568,6 +624,6 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     return (_jsxs("div", { "data-name": "onborda-wrapper", className: "relative w-full", "data-onborda": "dev", children: [_jsx("div", { "data-name": "onborda-site", className: "block w-full", children: children }), isOnbordaVisible && activeStep && CardComponent && (_jsxs(Portal, { children: [!interact && (_jsx("div", { className: "fixed inset-0 z-[890]", onClick: handleSkip })), _jsxs(motion.svg, { className: "fixed inset-0 w-full h-full z-[900] pointer-events-none", initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.3 }, "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("mask", { id: maskId, children: [_jsx("rect", { width: "100%", height: "100%", fill: "white" }), pointerPosition && (activeStep.spotlightShape === "circle" ? (_jsx(motion.circle, { cx: pointerPosition.x + pointerPosition.width / 2, cy: pointerPosition.y + pointerPosition.height / 2, r: Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset, fill: "black", transition: cardTransition })) : (_jsx(motion.rect, { x: pointerPosition.x - pointerPadOffset, y: pointerPosition.y - pointerPadOffset, width: pointerPosition.width + pointerPadding, height: pointerPosition.height + pointerPadding, rx: pointerRadius, ry: pointerRadius, fill: "black", transition: cardTransition })))] }) }), _jsx("rect", { width: "100%", height: "100%", fill: `rgba(${shadowRgb}, ${shadowOpacity})`, mask: `url(#${maskId})`, className: "pointer-events-auto" })] }), _jsx(FloatingFocusManager, { context: context, modal: !interact, initialFocus: 0, returnFocus: returnFocusRef, restoreFocus: true, closeOnFocusOut: false, children: _jsx("div", { ref: refs.setFloating, style: {
                                 ...(targetFound ? floatingStyles : fallbackFloatingStyles),
                                 zIndex: 950,
-                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsx("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", role: "dialog", "aria-label": activeStep.title, tabIndex: -1, children: _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: currentTourSteps?.length ?? 0, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: currentStep === 0, isLastStep: currentStep === (currentTourSteps?.length ?? 0) - 1, targetFound: targetFound, arrow: targetFound ? _jsx(CardArrow, {}) : null }) }) }) })] }))] }));
+                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: targetFound ? _jsx(CardArrow, {}) : null, a11y: cardA11y })] }) }) })] }))] }));
 };
 export default Onborda;

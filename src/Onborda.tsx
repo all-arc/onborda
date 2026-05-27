@@ -24,6 +24,8 @@ import {
 
 // Types
 import {
+  OnbordaA11yText,
+  OnbordaAccessibilityContext,
   OnbordaProps,
   RouteTransition,
   RouteTransitionDirection,
@@ -83,6 +85,14 @@ const getElementRect = (element: Element): TargetRect => {
   };
 };
 
+const resolveA11yText = (
+  value: OnbordaA11yText | undefined,
+  context: OnbordaAccessibilityContext
+) => {
+  if (typeof value === "function") return value(context);
+  return value;
+};
+
 const Onborda: React.FC<OnbordaProps> = ({
   children,
   interact = false,
@@ -92,6 +102,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   cardTransition = { ease: "anticipate", duration: 0.6 },
   cardComponent: CardComponent,
   targetMissingPolicy = "fallback",
+  accessibility,
   onTourStart,
   onStepChange,
   onTargetMissing,
@@ -124,6 +135,9 @@ const Onborda: React.FC<OnbordaProps> = ({
   const navigationDirectionRef = useRef<"forward" | "backward">("forward");
   const lastMissingTargetRef = useRef<string | null>(null);
   const maskId = useId();
+  const dialogId = useId();
+  const titleId = useId();
+  const descriptionId = useId();
 
   // Route Changes
   const router = useRouter();
@@ -705,6 +719,54 @@ const Onborda: React.FC<OnbordaProps> = ({
   const pointerPadOffset = pointerPadding / 2;
   const pointerRadius = activeStep?.pointerRadius ?? 28;
   const targetFound = targetStatus === "found" && !!pointerPosition;
+  const totalSteps = currentTourSteps?.length ?? 0;
+  const isFirstStep = currentStep === 0;
+  const isLastStep = currentStep === totalSteps - 1;
+  const accessibilityContext = activeStep ? {
+    step: activeStep,
+    currentStep,
+    totalSteps,
+    currentTour,
+    isFirstStep,
+    isLastStep,
+    targetFound,
+  } : null;
+  const defaultProgressText = totalSteps > 0
+    ? `Step ${currentStep + 1} of ${totalSteps}`
+    : "";
+  const progressText = accessibilityContext
+    ? resolveA11yText(accessibility?.progressText, accessibilityContext) ?? defaultProgressText
+    : defaultProgressText;
+  const dialogRole = accessibility?.dialogRole ?? "dialog";
+  const ariaModal = accessibility?.ariaModal ?? !interact;
+  const resolvedLabelledBy = accessibilityContext
+    ? resolveA11yText(accessibility?.ariaLabelledBy, accessibilityContext)
+    : undefined;
+  const ariaLabelledBy = resolvedLabelledBy === undefined && accessibility?.useCardLabelIds
+    ? titleId
+    : resolvedLabelledBy ?? undefined;
+  const resolvedDescribedBy = accessibilityContext
+    ? resolveA11yText(accessibility?.ariaDescribedBy, accessibilityContext)
+    : undefined;
+  const ariaDescribedBy = resolvedDescribedBy === undefined && accessibility?.useCardLabelIds
+    ? descriptionId
+    : resolvedDescribedBy ?? undefined;
+  const ariaLabel = ariaLabelledBy || !accessibilityContext
+    ? undefined
+    : resolveA11yText(accessibility?.ariaLabel, accessibilityContext) ?? activeStep?.title;
+  const liveRegion = accessibility?.liveRegion ?? "off";
+  const cardA11y = {
+    dialogId,
+    titleId,
+    descriptionId,
+    progressText,
+    titleProps: {
+      id: titleId,
+    },
+    descriptionProps: {
+      id: descriptionId,
+    },
+  };
   const fallbackFloatingStyles = {
     position: "fixed" as const,
     top: "50%",
@@ -795,22 +857,32 @@ const Onborda: React.FC<OnbordaProps> = ({
                 ref={cardRef}
                 className="flex flex-col max-w-[100%] transition-all min-w-min"
                 data-name="onborda-card"
-                role="dialog"
-                aria-label={activeStep.title}
+                id={dialogId}
+                role={dialogRole}
+                aria-label={ariaLabel ?? undefined}
+                aria-labelledby={ariaLabelledBy}
+                aria-describedby={ariaDescribedBy}
+                aria-modal={ariaModal}
                 tabIndex={-1}
               >
+                {liveRegion !== "off" && (
+                  <span className="sr-only" aria-live={liveRegion} aria-atomic="true">
+                    {progressText}
+                  </span>
+                )}
                 <CardComponent
                   step={activeStep}
                   currentStep={currentStep}
-                  totalSteps={currentTourSteps?.length ?? 0}
+                  totalSteps={totalSteps}
                   nextStep={nextStep}
                   prevStep={prevStep}
                   skipTour={handleSkip}
                   closeOnborda={handleClose}
-                  isFirstStep={currentStep === 0}
-                  isLastStep={currentStep === (currentTourSteps?.length ?? 0) - 1}
+                  isFirstStep={isFirstStep}
+                  isLastStep={isLastStep}
                   targetFound={targetFound}
                   arrow={targetFound ? <CardArrow /> : null}
+                  a11y={cardA11y}
                 />
               </div>
             </div>

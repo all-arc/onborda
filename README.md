@@ -217,6 +217,57 @@ For multi-page tours using `nextRoute` or `prevRoute`, Onborda exposes hooks aro
 | `onRouteTransitionTimeout` | When the target selector is still missing after 5 seconds. |
 | `onRouteTransitionError` | When route navigation throws. The current step remains active. |
 
+### Accessibility API
+Onborda labels the card wrapper as a `dialog` by default using the current step title. Use `accessibility` when you need stronger semantics, custom labels, or card-managed `aria-labelledby` / `aria-describedby`.
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  accessibility={{
+    dialogRole: "alertdialog",
+    ariaModal: true,
+    useCardLabelIds: true,
+    liveRegion: "polite",
+    progressText: ({ currentStep, totalSteps }) =>
+      `Step ${currentStep + 1} of ${totalSteps}`,
+  }}
+>
+  {children}
+</Onborda>
+```
+
+When `useCardLabelIds` is enabled, wire the generated IDs into your custom card:
+
+```tsx
+import type { CardComponentProps } from "onborda";
+
+export function CustomCard({ step, a11y }: CardComponentProps) {
+  return (
+    <section>
+      <h2 {...a11y.titleProps}>{step.title}</h2>
+      <div {...a11y.descriptionProps}>{step.content}</div>
+      <p>{a11y.progressText}</p>
+    </section>
+  );
+}
+```
+
+You can also provide explicit label resolvers:
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  accessibility={{
+    ariaLabel: ({ step }) => `Onboarding: ${step.title}`,
+    ariaDescribedBy: "onboarding-description",
+  }}
+>
+  {children}
+</Onborda>
+```
+
 ### Tailwind config
 Tailwind CSS will need to scan the node module in order to include the classes used by the overlay wrapper. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
 
@@ -244,6 +295,7 @@ Onborda requires a custom card component. This keeps the library focused on posi
 | `isLastStep`    | `boolean`        | Indicates whether the current step is the last step. |
 | `targetFound`   | `boolean`        | Indicates whether the current selector matched an element. |
 | `arrow`         | `ReactElement \| null` | Returns an SVG arrow element when a target is found. It is `null` when the card is rendered in fallback mode. |
+| `a11y`          | `OnbordaCardAccessibilityProps` | Generated IDs and helper props for connecting your card title/description to the dialog wrapper. |
 
 ```tsx
 "use client"
@@ -260,12 +312,13 @@ export const CustomCard = ({
   isLastStep,
   targetFound,
   arrow,
+  a11y,
 }: CardComponentProps) => {
   return (
     <div aria-live="polite">
-      <h1>{step.icon} {step.title}</h1>
+      <h1 {...a11y.titleProps}>{step.icon} {step.title}</h1>
       <h2>{currentStep + 1} of {totalSteps}</h2>
-      <p>{step.content}</p>
+      <p {...a11y.descriptionProps}>{step.content}</p>
       {!targetFound && <p>The highlighted element is not currently available.</p>}
       <button onClick={prevStep} disabled={isFirstStep}>Previous</button>
       <button onClick={nextStep}>{isLastStep ? "Finish" : "Next"}</button>
@@ -371,6 +424,7 @@ export const steps: Tour[] = [
 | `cardComponent` | `ComponentType<CardComponentProps>` | Required. A custom React component used to render the card/tooltip. |
 | `cardTransition`| `Transition`          | Transitions between steps. Accepts framer-motion `Transition` configurations. Example: `{{ type: "spring" }}`. |
 | `targetMissingPolicy` | `"fallback"` \| `"skip-step"` \| `"skip-tour"` | Optional. Controls what happens when the current step selector does not match an element. Defaults to `"fallback"`. |
+| `accessibility` | `OnbordaAccessibilityOptions` | Optional. Controls dialog role, aria labels, aria descriptions, modal semantics, progress text, and live region announcements. |
 | `onTourStart`   | `(tour: string) => void` | Optional. Callback function triggered when a tour begins. |
 | `onStepChange`  | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered whenever the active step changes. |
 | `onTargetMissing` | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered once when the current selector cannot be found. |

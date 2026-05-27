@@ -96,6 +96,45 @@ export interface RouteTransitionComplete extends RouteTransition {
   targetFound: boolean;
 }
 
+export interface OnbordaAccessibilityContext {
+  step: Step;
+  currentStep: number;
+  totalSteps: number;
+  currentTour: string | null;
+  isFirstStep: boolean;
+  isLastStep: boolean;
+  targetFound: boolean;
+}
+
+export type OnbordaA11yText =
+  | string
+  | null
+  | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+
+export interface OnbordaAccessibilityOptions {
+  dialogRole?: "dialog" | "alertdialog";
+  ariaLabel?: OnbordaA11yText;
+  ariaLabelledBy?: OnbordaA11yText;
+  ariaDescribedBy?: OnbordaA11yText;
+  ariaModal?: boolean;
+  useCardLabelIds?: boolean;
+  progressText?: OnbordaA11yText;
+  liveRegion?: "off" | "polite" | "assertive";
+}
+
+export interface OnbordaCardAccessibilityProps {
+  dialogId: string;
+  titleId: string;
+  descriptionId: string;
+  progressText: string;
+  titleProps: {
+    id: string;
+  };
+  descriptionProps: {
+    id: string;
+  };
+}
+
 // Onborda
 export interface OnbordaProps {
   children: React.ReactNode;
@@ -107,6 +146,7 @@ export interface OnbordaProps {
   cardTransition?: Transition;
   cardComponent: React.ComponentType<CardComponentProps>;
   targetMissingPolicy?: TargetMissingPolicy;
+  accessibility?: OnbordaAccessibilityOptions;
   // Callbacks
   onTourStart?: (tour: string) => void;
   onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
@@ -132,4 +172,5 @@ export interface CardComponentProps {
   isLastStep: boolean;
   targetFound: boolean;
   arrow?: React.ReactElement | null;
+  a11y: OnbordaCardAccessibilityProps;
 }
