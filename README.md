@@ -72,7 +72,7 @@ You can also set uncontrolled initial state with `default*` props:
 </OnbordaProvider>
 ```
 
-For persisted progress, URL-driven tours, or product analytics flows, control the state from a parent component. When a controlled prop is provided, Onborda calls the matching change callback and waits for the parent to update the prop:
+For URL-driven tours, product analytics flows, or app-owned persistence, control the state from a parent component. When a controlled prop is provided, Onborda calls the matching change callback and waits for the parent to update the prop:
 
 ```tsx
 "use client";
@@ -122,10 +122,45 @@ export function ControlledTour({ children }: { children: React.ReactNode }) {
 | `defaultCurrentTour`       | `string \| null`                  | Initial tour name for uncontrolled usage. Defaults to `null`. |
 | `defaultCurrentStep`       | `number`                          | Initial step index for uncontrolled usage. Defaults to `0`. |
 | `defaultIsOnbordaVisible`  | `boolean`                         | Initial open state for uncontrolled usage. Defaults to `false`. |
+| `progressPersistence`      | `boolean \| OnbordaProgressPersistenceOptions` | Optional. Persists provider progress to storage and restores it on mount. Defaults to `false`. |
 | `onCurrentTourChange`      | `(tour: string \| null) => void`  | Called when Onborda requests a tour change. |
 | `onCurrentStepChange`      | `(step: number) => void`          | Called when Onborda requests a step change. |
 | `onOpenChange`             | `(open: boolean) => void`         | Called when Onborda requests an open/closed state change. |
 | `onStateChange`            | `(state: OnbordaState) => void`   | Called with the complete next state for each Onborda action. |
+
+### Progress persistence
+Use `progressPersistence` to resume an interrupted uncontrolled tour after reloads or route remounts. Passing `true` uses `window.localStorage` with the default key `onborda:progress`.
+
+```tsx
+<OnbordaProvider progressPersistence>
+  <Onborda steps={steps} cardComponent={CustomCard}>
+    {children}
+  </Onborda>
+</OnbordaProvider>
+```
+
+You can customize the key or inject your own storage implementation:
+
+```tsx
+<OnbordaProvider
+  progressPersistence={{
+    storageKey: "acme:onboarding-progress",
+    restore: true,
+  }}
+>
+  <Onborda steps={steps} cardComponent={CustomCard}>
+    {children}
+  </Onborda>
+</OnbordaProvider>
+```
+
+The stored payload is versioned and contains `{ currentTour, currentStep, isOnbordaVisible, updatedAt }`. Use `clearPersistedProgress()` from `useOnborda()` when you need to reset the saved progress:
+
+```tsx
+const { clearPersistedProgress } = useOnborda();
+
+<button onClick={clearPersistedProgress}>Reset onboarding progress</button>
+```
 
 ### Target missing policy
 By default, if a step selector does not match an element, Onborda keeps the tour open and renders the same custom card in the center of the viewport with `targetFound: false` and `arrow: null`.
@@ -150,6 +185,37 @@ Use `targetMissingPolicy` when a missing target should be handled automatically:
 | `fallback`    | Default. Render the card in the viewport center and keep the tour recoverable. |
 | `skip-step`   | Skip the missing step. Next navigation skips forward; previous navigation skips backward. If there is no step to skip to, the tour completes when moving forward or skips when moving backward. |
 | `skip-tour`   | Call `onTargetMissing`, trigger the same skip flow as `skipTour`, and close the tour. |
+
+### Route transition hooks
+For multi-page tours using `nextRoute` or `prevRoute`, Onborda exposes hooks around its internal route transition flow. These hooks are scoped to tour step transitions, not global Next.js route events.
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  onRouteTransitionStart={(transition) => {
+    console.log("route start", transition.route);
+  }}
+  onRouteTransitionComplete={(transition) => {
+    console.log("route complete", transition.targetFound);
+  }}
+  onRouteTransitionTimeout={(transition) => {
+    console.warn("target timed out", transition.toStep.selector);
+  }}
+  onRouteTransitionError={(transition, error) => {
+    console.error("route failed", transition.route, error);
+  }}
+>
+  {children}
+</Onborda>
+```
+
+| Hook | When it fires |
+|------|---------------|
+| `onRouteTransitionStart` | Immediately before `router.push(route)` for `nextRoute` or `prevRoute`. |
+| `onRouteTransitionComplete` | After the next target is found, or after the 5-second timeout moves the tour into fallback mode. Includes `targetFound`. |
+| `onRouteTransitionTimeout` | When the target selector is still missing after 5 seconds. |
+| `onRouteTransitionError` | When route navigation throws. The current step remains active. |
 
 ### Tailwind config
 Tailwind CSS will need to scan the node module in order to include the classes used by the overlay wrapper. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
@@ -308,6 +374,10 @@ export const steps: Tour[] = [
 | `onTourStart`   | `(tour: string) => void` | Optional. Callback function triggered when a tour begins. |
 | `onStepChange`  | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered whenever the active step changes. |
 | `onTargetMissing` | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered once when the current selector cannot be found. |
+| `onRouteTransitionStart` | `(transition: RouteTransition) => void` | Optional. Callback function triggered before a routed step transition starts. |
+| `onRouteTransitionComplete` | `(transition: RouteTransitionComplete) => void` | Optional. Callback function triggered after a routed step transition resolves. |
+| `onRouteTransitionTimeout` | `(transition: RouteTransition) => void` | Optional. Callback function triggered when a routed target is not found within 5 seconds. |
+| `onRouteTransitionError` | `(transition: RouteTransition, error: unknown) => void` | Optional. Callback function triggered when routed navigation throws. |
 | `onTourComplete`| `(tour: string) => void` | Optional. Callback function triggered when a tour has been successfully completed. |
 | `onTourSkip`    | `(tour: string, currentStep: number) => void` | Optional. Callback function triggered when the user skips or closes the tour. |
 

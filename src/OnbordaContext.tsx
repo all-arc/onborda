@@ -12,6 +12,9 @@ import React, {
 // Types
 import {
   OnbordaContextType,
+  OnbordaPersistedProgress,
+  OnbordaProgressPersistence,
+  OnbordaProgressStorage,
   OnbordaProviderProps,
   OnbordaState,
 } from "./types/index.js";
@@ -29,6 +32,108 @@ const useOnborda = () => {
 const hasStateKey = (patch: Partial<OnbordaState>, key: keyof OnbordaState) =>
   Object.prototype.hasOwnProperty.call(patch, key);
 
+const defaultProgressStorageKey = "onborda:progress";
+
+const getBrowserStorage = (): OnbordaProgressStorage | null => {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  return window.localStorage;
+};
+
+const getProgressPersistenceConfig = (
+  progressPersistence: OnbordaProgressPersistence | undefined
+) => {
+  if (!progressPersistence) {
+    return {
+      enabled: false,
+      storageKey: defaultProgressStorageKey,
+      storage: null,
+      restore: true,
+    };
+  }
+
+  if (progressPersistence === true) {
+    return {
+      enabled: true,
+      storageKey: defaultProgressStorageKey,
+      storage: getBrowserStorage(),
+      restore: true,
+    };
+  }
+
+  return {
+    enabled: true,
+    storageKey: progressPersistence.storageKey ?? defaultProgressStorageKey,
+    storage: progressPersistence.storage ?? getBrowserStorage(),
+    restore: progressPersistence.restore ?? true,
+  };
+};
+
+const parsePersistedProgress = (
+  value: string | null
+): OnbordaPersistedProgress | null => {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as Partial<OnbordaPersistedProgress>;
+    if (parsed.version !== 1) return null;
+    if (
+      parsed.currentTour !== null &&
+      typeof parsed.currentTour !== "string"
+    ) {
+      return null;
+    }
+    if (typeof parsed.currentStep !== "number") return null;
+    if (!Number.isFinite(parsed.currentStep)) return null;
+    if (parsed.currentStep < 0) return null;
+    if (typeof parsed.isOnbordaVisible !== "boolean") return null;
+    if (typeof parsed.updatedAt !== "number") return null;
+
+    return {
+      version: 1,
+      currentTour: parsed.currentTour ?? null,
+      currentStep: parsed.currentStep,
+      isOnbordaVisible: parsed.isOnbordaVisible,
+      updatedAt: parsed.updatedAt,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readPersistedProgress = (
+  storage: OnbordaProgressStorage | null,
+  storageKey: string
+) => {
+  try {
+    return parsePersistedProgress(storage?.getItem(storageKey) ?? null);
+  } catch {
+    return null;
+  }
+};
+
+const writePersistedProgress = (
+  storage: OnbordaProgressStorage,
+  storageKey: string,
+  progress: OnbordaPersistedProgress
+) => {
+  try {
+    storage.setItem(storageKey, JSON.stringify(progress));
+  } catch {
+    // Storage can fail in private browsing or when quota is exceeded.
+  }
+};
+
+const removePersistedProgress = (
+  storage: OnbordaProgressStorage,
+  storageKey: string
+) => {
+  try {
+    storage.removeItem(storageKey);
+  } catch {
+    // Storage can fail in private browsing or when quota is exceeded.
+  }
+};
+
 const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
   children,
   currentTour: controlledCurrentTour,
@@ -37,6 +142,7 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
   defaultCurrentTour = null,
   defaultCurrentStep = 0,
   defaultIsOnbordaVisible = false,
+  progressPersistence = false,
   onCurrentTourChange,
   onCurrentStepChange,
   onOpenChange,
@@ -48,6 +154,13 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     useState(defaultCurrentStep);
   const [uncontrolledIsOnbordaVisible, setUncontrolledIsOnbordaVisible] =
     useState(defaultIsOnbordaVisible);
+  const progressConfig = useMemo(
+    () => getProgressPersistenceConfig(progressPersistence),
+    [progressPersistence]
+  );
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(
+    !progressConfig.enabled || !progressConfig.restore
+  );
 
   const currentTour =
     controlledCurrentTour !== undefined
@@ -79,8 +192,10 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     onOpenChange,
     onStateChange,
   });
+  const progressConfigRef = useRef(progressConfig);
 
   stateRef.current = { currentTour, currentStep, isOnbordaVisible };
+  progressConfigRef.current = progressConfig;
   controlRef.current = {
     currentTour: controlledCurrentTour !== undefined,
     currentStep: controlledCurrentStep !== undefined,
@@ -142,6 +257,13 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     delayTimeoutRef.current = null;
   }, []);
 
+  const clearPersistedProgress = useCallback(() => {
+    const { enabled, storage, storageKey } = progressConfigRef.current;
+    if (!enabled || !storage) return;
+
+    removePersistedProgress(storage, storageKey);
+  }, []);
+
   const setCurrentStep = useCallback((step: number, delay?: number) => {
     clearDelayedStep();
     if (delay) {
@@ -171,6 +293,62 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
 
   useEffect(() => clearDelayedStep, [clearDelayedStep]);
 
+  useEffect(() => {
+    if (!progressConfig.enabled || !progressConfig.restore) {
+      setHasRestoredProgress(true);
+      return;
+    }
+
+    const restoredProgress = readPersistedProgress(
+      progressConfig.storage,
+      progressConfig.storageKey
+    );
+
+    if (restoredProgress) {
+      updateState({
+        currentTour: restoredProgress.currentTour,
+        currentStep: restoredProgress.currentStep,
+        isOnbordaVisible: restoredProgress.isOnbordaVisible,
+      });
+    }
+
+    setHasRestoredProgress(true);
+  }, [
+    progressConfig.enabled,
+    progressConfig.restore,
+    progressConfig.storage,
+    progressConfig.storageKey,
+    updateState,
+  ]);
+
+  useEffect(() => {
+    if (!progressConfig.enabled || !progressConfig.storage || !hasRestoredProgress) {
+      return;
+    }
+
+    const progress: OnbordaPersistedProgress = {
+      version: 1,
+      currentTour,
+      currentStep,
+      isOnbordaVisible,
+      updatedAt: Date.now(),
+    };
+
+    writePersistedProgress(
+      progressConfig.storage,
+      progressConfig.storageKey,
+      progress
+    );
+  }, [
+    currentStep,
+    currentTour,
+    hasRestoredProgress,
+    isOnbordaVisible,
+    progressConfig.enabled,
+    progressConfig.storage,
+    progressConfig.storageKey,
+  ]);
+
   const contextValue = useMemo(
     () => ({
       currentTour,
@@ -178,9 +356,11 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       setCurrentStep,
       closeOnborda,
       startOnborda,
+      clearPersistedProgress,
       isOnbordaVisible,
     }),
     [
+      clearPersistedProgress,
       closeOnborda,
       currentStep,
       currentTour,

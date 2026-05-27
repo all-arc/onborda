@@ -1,11 +1,18 @@
 import React, { useEffect } from "react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Onborda from "./Onborda";
 import { OnbordaProvider, useOnborda } from "./OnbordaContext";
-import type { CardComponentProps, OnbordaState, Tour } from "./types";
+import type {
+  CardComponentProps,
+  OnbordaProgressStorage,
+  OnbordaState,
+  RouteTransition,
+  RouteTransitionComplete,
+  Tour,
+} from "./types";
 
 const pushMock = vi.fn();
 
@@ -18,7 +25,22 @@ vi.mock("next/navigation", () => ({
 afterEach(() => {
   cleanup();
   pushMock.mockClear();
+  vi.useRealTimers();
 });
+
+function createMemoryStorage(initialValues: Record<string, string> = {}): OnbordaProgressStorage {
+  const values = new Map(Object.entries(initialValues));
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    },
+  };
+}
 
 const tours: Tour[] = [
   {
@@ -66,6 +88,49 @@ const policyTours: Tour[] = [
   },
 ];
 
+const routeTours: Tour[] = [
+  {
+    tour: "main",
+    steps: [
+      {
+        title: "First step",
+        content: "First content",
+        selector: "#first-target",
+        side: "bottom",
+        nextRoute: "/second",
+      },
+      {
+        title: "Second step",
+        content: "Second content",
+        selector: "#second-target",
+        side: "bottom",
+        prevRoute: "/first",
+      },
+    ],
+  },
+];
+
+const routeMissingTargetTours: Tour[] = [
+  {
+    tour: "main",
+    steps: [
+      {
+        title: "First step",
+        content: "First content",
+        selector: "#first-target",
+        side: "bottom",
+        nextRoute: "/missing-target",
+      },
+      {
+        title: "Missing route step",
+        content: "Missing route content",
+        selector: "#missing-route-target",
+        side: "bottom",
+      },
+    ],
+  },
+];
+
 function Starter({ step = 0 }: { step?: number }) {
   const { startOnborda, setCurrentStep } = useOnborda();
 
@@ -86,6 +151,21 @@ function StartButton() {
     <button type="button" onClick={() => startOnborda("main")}>
       Start tour
     </button>
+  );
+}
+
+function ProgressControls() {
+  const { startOnborda, clearPersistedProgress } = useOnborda();
+
+  return (
+    <>
+      <button type="button" onClick={() => startOnborda("main")}>
+        Start tour
+      </button>
+      <button type="button" onClick={clearPersistedProgress}>
+        Clear progress
+      </button>
+    </>
   );
 }
 
@@ -268,6 +348,52 @@ function renderPolicyOnborda({
   };
 }
 
+function renderRouteOnborda({
+  routeSteps = routeTours,
+  includeSecondTarget = true,
+  onRouteTransitionStart = vi.fn(),
+  onRouteTransitionComplete = vi.fn(),
+  onRouteTransitionTimeout = vi.fn(),
+  onRouteTransitionError = vi.fn(),
+}: {
+  routeSteps?: Tour[];
+  includeSecondTarget?: boolean;
+  onRouteTransitionStart?: (transition: RouteTransition) => void;
+  onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
+  onRouteTransitionTimeout?: (transition: RouteTransition) => void;
+  onRouteTransitionError?: (transition: RouteTransition, error: unknown) => void;
+} = {}) {
+  return {
+    onRouteTransitionStart,
+    onRouteTransitionComplete,
+    onRouteTransitionTimeout,
+    onRouteTransitionError,
+    ...render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        {includeSecondTarget && (
+          <div id="second-target" style={{ position: "absolute", zIndex: "5" }}>
+            Second target
+          </div>
+        )}
+        <Onborda
+          steps={routeSteps}
+          interact
+          cardComponent={TestCard}
+          onRouteTransitionStart={onRouteTransitionStart}
+          onRouteTransitionComplete={onRouteTransitionComplete}
+          onRouteTransitionTimeout={onRouteTransitionTimeout}
+          onRouteTransitionError={onRouteTransitionError}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    ),
+  };
+}
+
 describe("Onborda", () => {
   it("passes the expanded card props when the target exists", async () => {
     renderOnborda();
@@ -326,6 +452,111 @@ describe("Onborda", () => {
     });
     expect(onTargetMissing).toHaveBeenCalledWith("main", 1, tours[0].steps[1]);
     expect(onTourSkip).toHaveBeenCalledWith("main", 1);
+  });
+
+  it("fires route transition hooks when a routed target is found", async () => {
+    const {
+      onRouteTransitionStart,
+      onRouteTransitionComplete,
+      onRouteTransitionTimeout,
+      onRouteTransitionError,
+    } = renderRouteOnborda();
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/second");
+    expect(onRouteTransitionStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tour: "main",
+        fromStepIndex: 0,
+        toStepIndex: 1,
+        route: "/second",
+        direction: "next",
+      })
+    );
+    expect(onRouteTransitionComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tour: "main",
+        fromStepIndex: 0,
+        toStepIndex: 1,
+        route: "/second",
+        direction: "next",
+        targetFound: true,
+      })
+    );
+    expect(onRouteTransitionTimeout).not.toHaveBeenCalled();
+    expect(onRouteTransitionError).not.toHaveBeenCalled();
+    expect(await screen.findByRole("dialog", { name: "Second step" })).toBeInTheDocument();
+  });
+
+  it("fires timeout and completion hooks when a routed target is missing", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const {
+      onRouteTransitionStart,
+      onRouteTransitionComplete,
+      onRouteTransitionTimeout,
+    } = renderRouteOnborda({
+      routeSteps: routeMissingTargetTours,
+      includeSecondTarget: false,
+    });
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(onRouteTransitionStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: "/missing-target",
+        direction: "next",
+      })
+    );
+    expect(onRouteTransitionTimeout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: "/missing-target",
+        toStepIndex: 1,
+      })
+    );
+    expect(onRouteTransitionComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: "/missing-target",
+        toStepIndex: 1,
+        targetFound: false,
+      })
+    );
+    expect(screen.getByRole("dialog", { name: "Missing route step" })).toBeInTheDocument();
+    warnSpy.mockRestore();
+  });
+
+  it("fires route transition error hook when route navigation throws", async () => {
+    const error = new Error("route failed");
+    pushMock.mockImplementationOnce(() => {
+      throw error;
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { onRouteTransitionError, onRouteTransitionComplete } = renderRouteOnborda();
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(onRouteTransitionError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: "/second",
+        direction: "next",
+      }),
+      error
+    );
+    expect(onRouteTransitionComplete).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "First step" })).toBeInTheDocument();
+    errorSpy.mockRestore();
   });
 
   it("does not navigate steps with arrow keys while typing in an input", async () => {
@@ -436,5 +667,101 @@ describe("Onborda", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+  });
+
+  it("restores uncontrolled progress from persisted storage", async () => {
+    const storageKey = "onborda:test-progress";
+    const storage = createMemoryStorage({
+      [storageKey]: JSON.stringify({
+        version: 1,
+        currentTour: "main",
+        currentStep: 1,
+        isOnbordaVisible: true,
+        updatedAt: Date.now(),
+      }),
+    });
+
+    render(
+      <OnbordaProvider
+        progressPersistence={{
+          storage,
+          storageKey,
+        }}
+      >
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda steps={tours} interact cardComponent={TestCard}>
+          <div />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
+  });
+
+  it("persists progress when the tour state changes", async () => {
+    const storageKey = "onborda:test-progress";
+    const storage = createMemoryStorage();
+
+    render(
+      <OnbordaProvider
+        progressPersistence={{
+          storage,
+          storageKey,
+        }}
+      >
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda steps={tours} interact cardComponent={TestCard}>
+          <StartButton />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Start tour" }));
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    await waitFor(() => {
+      expect(JSON.parse(storage.getItem(storageKey) ?? "{}")).toMatchObject({
+        version: 1,
+        currentTour: "main",
+        currentStep: 1,
+        isOnbordaVisible: true,
+      });
+    });
+  });
+
+  it("can clear persisted progress from the context", async () => {
+    const storageKey = "onborda:test-progress";
+    const storage = createMemoryStorage();
+
+    render(
+      <OnbordaProvider
+        progressPersistence={{
+          storage,
+          storageKey,
+        }}
+      >
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda steps={tours} interact cardComponent={TestCard}>
+          <ProgressControls />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Start tour" }));
+    await waitFor(() => {
+      expect(storage.getItem(storageKey)).not.toBeNull();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear progress" }));
+
+    expect(storage.getItem(storageKey)).toBeNull();
   });
 });

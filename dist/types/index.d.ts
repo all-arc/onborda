@@ -5,6 +5,7 @@ export interface OnbordaContextType {
     setCurrentStep: (step: number, delay?: number) => void;
     closeOnborda: () => void;
     startOnborda: (tourName: string) => void;
+    clearPersistedProgress: () => void;
     isOnbordaVisible: boolean;
 }
 export interface OnbordaState {
@@ -12,6 +13,21 @@ export interface OnbordaState {
     currentStep: number;
     isOnbordaVisible: boolean;
 }
+export interface OnbordaPersistedProgress extends OnbordaState {
+    version: 1;
+    updatedAt: number;
+}
+export interface OnbordaProgressStorage {
+    getItem: (key: string) => string | null;
+    setItem: (key: string, value: string) => void;
+    removeItem: (key: string) => void;
+}
+export interface OnbordaProgressPersistenceOptions {
+    storageKey?: string;
+    storage?: OnbordaProgressStorage;
+    restore?: boolean;
+}
+export type OnbordaProgressPersistence = boolean | OnbordaProgressPersistenceOptions;
 export interface OnbordaProviderProps {
     children: React.ReactNode;
     currentTour?: string | null;
@@ -20,6 +36,7 @@ export interface OnbordaProviderProps {
     defaultCurrentTour?: string | null;
     defaultCurrentStep?: number;
     defaultIsOnbordaVisible?: boolean;
+    progressPersistence?: OnbordaProgressPersistence;
     onCurrentTourChange?: (tour: string | null) => void;
     onCurrentStepChange?: (step: number) => void;
     onOpenChange?: (open: boolean) => void;
@@ -43,6 +60,19 @@ export interface Tour {
     steps: Step[];
 }
 export type TargetMissingPolicy = "fallback" | "skip-step" | "skip-tour";
+export type RouteTransitionDirection = "next" | "prev";
+export interface RouteTransition {
+    tour: string;
+    fromStepIndex: number;
+    toStepIndex: number;
+    fromStep: Step;
+    toStep: Step;
+    route: string;
+    direction: RouteTransitionDirection;
+}
+export interface RouteTransitionComplete extends RouteTransition {
+    targetFound: boolean;
+}
 export interface OnbordaProps {
     children: React.ReactNode;
     interact?: boolean;
@@ -56,6 +86,10 @@ export interface OnbordaProps {
     onTourStart?: (tour: string) => void;
     onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
     onTargetMissing?: (tour: string, stepIndex: number, step: Step) => void;
+    onRouteTransitionStart?: (transition: RouteTransition) => void;
+    onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
+    onRouteTransitionTimeout?: (transition: RouteTransition) => void;
+    onRouteTransitionError?: (transition: RouteTransition, error: unknown) => void;
     onTourComplete?: (tour: string) => void;
     onTourSkip?: (tour: string, currentStep: number) => void;
 }

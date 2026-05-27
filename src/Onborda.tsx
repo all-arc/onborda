@@ -23,7 +23,11 @@ import {
 } from "@floating-ui/react";
 
 // Types
-import { OnbordaProps } from "./types/index.js";
+import {
+  OnbordaProps,
+  RouteTransition,
+  RouteTransitionDirection,
+} from "./types/index.js";
 
 type TargetRect = {
   x: number;
@@ -91,6 +95,10 @@ const Onborda: React.FC<OnbordaProps> = ({
   onTourStart,
   onStepChange,
   onTargetMissing,
+  onRouteTransitionStart,
+  onRouteTransitionComplete,
+  onRouteTransitionTimeout,
+  onRouteTransitionError,
   onTourComplete,
   onTourSkip,
 }) => {
@@ -271,6 +279,31 @@ const Onborda: React.FC<OnbordaProps> = ({
     [currentTourSteps, scrollElementIntoView, updatePointerPosition]
   );
 
+  const getRouteTransition = useCallback(
+    (
+      toStepIndex: number,
+      route: string,
+      direction: RouteTransitionDirection
+    ): RouteTransition | null => {
+      if (!currentTour || !currentTourSteps) return null;
+
+      const fromStep = currentTourSteps[currentStep];
+      const toStep = currentTourSteps[toStepIndex];
+      if (!fromStep || !toStep) return null;
+
+      return {
+        tour: currentTour,
+        fromStepIndex: currentStep,
+        toStepIndex,
+        fromStep,
+        toStep,
+        route,
+        direction,
+      };
+    },
+    [currentStep, currentTour, currentTourSteps]
+  );
+
   // Lifecycle wrappers
   const handleComplete = useCallback(() => {
     if (currentTour) {
@@ -388,18 +421,22 @@ const Onborda: React.FC<OnbordaProps> = ({
   }, [cleanupMutationObserver, restoreActiveElementStyle]);
 
   const waitForRouteTarget = useCallback(
-    (stepIndex: number) => {
+    (stepIndex: number, routeTransition: RouteTransition) => {
       if (!currentTourSteps) return;
 
       const targetSelector = currentTourSteps[stepIndex].selector;
 
-      const showStep = () => {
+      const showStep = (targetFound: boolean) => {
         setCurrentStep(stepIndex);
         scrollToElement(stepIndex);
+        onRouteTransitionComplete?.({
+          ...routeTransition,
+          targetFound,
+        });
       };
 
       if (document.querySelector(targetSelector)) {
-        showStep();
+        showStep(true);
         return;
       }
 
@@ -410,7 +447,7 @@ const Onborda: React.FC<OnbordaProps> = ({
           clearTimeout(mutationTimeoutRef.current);
           mutationTimeoutRef.current = null;
         }
-        showStep();
+        showStep(true);
         obs.disconnect();
         mutationObserverRef.current = null;
       });
@@ -428,10 +465,22 @@ const Onborda: React.FC<OnbordaProps> = ({
         observer.disconnect();
         mutationObserverRef.current = null;
         mutationTimeoutRef.current = null;
+        onRouteTransitionTimeout?.(routeTransition);
         setCurrentStep(stepIndex);
+        onRouteTransitionComplete?.({
+          ...routeTransition,
+          targetFound: false,
+        });
       }, 5000);
     },
-    [cleanupMutationObserver, currentTourSteps, scrollToElement, setCurrentStep]
+    [
+      cleanupMutationObserver,
+      currentTourSteps,
+      onRouteTransitionComplete,
+      onRouteTransitionTimeout,
+      scrollToElement,
+      setCurrentStep,
+    ]
   );
 
   // Step Controls
@@ -439,6 +488,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     if (!currentTourSteps) return;
 
     if (currentStep < currentTourSteps.length - 1) {
+      let routeTransition: RouteTransition | null = null;
       try {
         const nextStepIndex = currentStep + 1;
         const route = currentTourSteps[currentStep].nextRoute;
@@ -447,13 +497,20 @@ const Onborda: React.FC<OnbordaProps> = ({
         cleanupMutationObserver();
 
         if (route) {
+          routeTransition = getRouteTransition(nextStepIndex, route, "next");
+          if (!routeTransition) return;
+
+          onRouteTransitionStart?.(routeTransition);
           await router.push(route);
-          waitForRouteTarget(nextStepIndex);
+          waitForRouteTarget(nextStepIndex, routeTransition);
         } else {
           setCurrentStep(nextStepIndex);
           scrollToElement(nextStepIndex);
         }
       } catch (error) {
+        if (routeTransition) {
+          onRouteTransitionError?.(routeTransition, error);
+        }
         console.error("Error navigating to next route", error);
       }
     } else {
@@ -463,7 +520,10 @@ const Onborda: React.FC<OnbordaProps> = ({
     cleanupMutationObserver,
     currentStep,
     currentTourSteps,
+    getRouteTransition,
     handleComplete,
+    onRouteTransitionError,
+    onRouteTransitionStart,
     router,
     scrollToElement,
     setCurrentStep,
@@ -473,6 +533,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   const prevStep = useCallback(async () => {
     if (!currentTourSteps || currentStep <= 0) return;
 
+    let routeTransition: RouteTransition | null = null;
     try {
       const prevStepIndex = currentStep - 1;
       const route = currentTourSteps[currentStep].prevRoute;
@@ -481,19 +542,29 @@ const Onborda: React.FC<OnbordaProps> = ({
       cleanupMutationObserver();
 
       if (route) {
+        routeTransition = getRouteTransition(prevStepIndex, route, "prev");
+        if (!routeTransition) return;
+
+        onRouteTransitionStart?.(routeTransition);
         await router.push(route);
-        waitForRouteTarget(prevStepIndex);
+        waitForRouteTarget(prevStepIndex, routeTransition);
       } else {
         setCurrentStep(prevStepIndex);
         scrollToElement(prevStepIndex);
       }
     } catch (error) {
+      if (routeTransition) {
+        onRouteTransitionError?.(routeTransition, error);
+      }
       console.error("Error navigating to previous route", error);
     }
   }, [
     cleanupMutationObserver,
     currentStep,
     currentTourSteps,
+    getRouteTransition,
+    onRouteTransitionError,
+    onRouteTransitionStart,
     router,
     scrollToElement,
     setCurrentStep,

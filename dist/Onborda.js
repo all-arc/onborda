@@ -39,7 +39,7 @@ const getElementRect = (element) => {
         height,
     };
 };
-const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", onTourStart, onStepChange, onTargetMissing, onTourComplete, onTourSkip, }) => {
+const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onTourComplete, onTourSkip, }) => {
     const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda } = useOnborda();
     const currentTourSteps = useMemo(() => steps.find((tour) => tour.tour === currentTour)?.steps, [currentTour, steps]);
     const activeStep = currentTourSteps?.[currentStep];
@@ -180,6 +180,23 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         scrollElementIntoView(element);
         updatePointerPosition(element);
     }, [currentTourSteps, scrollElementIntoView, updatePointerPosition]);
+    const getRouteTransition = useCallback((toStepIndex, route, direction) => {
+        if (!currentTour || !currentTourSteps)
+            return null;
+        const fromStep = currentTourSteps[currentStep];
+        const toStep = currentTourSteps[toStepIndex];
+        if (!fromStep || !toStep)
+            return null;
+        return {
+            tour: currentTour,
+            fromStepIndex: currentStep,
+            toStepIndex,
+            fromStep,
+            toStep,
+            route,
+            direction,
+        };
+    }, [currentStep, currentTour, currentTourSteps]);
     // Lifecycle wrappers
     const handleComplete = useCallback(() => {
         if (currentTour) {
@@ -291,16 +308,20 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             restoreActiveElementStyle();
         };
     }, [cleanupMutationObserver, restoreActiveElementStyle]);
-    const waitForRouteTarget = useCallback((stepIndex) => {
+    const waitForRouteTarget = useCallback((stepIndex, routeTransition) => {
         if (!currentTourSteps)
             return;
         const targetSelector = currentTourSteps[stepIndex].selector;
-        const showStep = () => {
+        const showStep = (targetFound) => {
             setCurrentStep(stepIndex);
             scrollToElement(stepIndex);
+            onRouteTransitionComplete?.({
+                ...routeTransition,
+                targetFound,
+            });
         };
         if (document.querySelector(targetSelector)) {
-            showStep();
+            showStep(true);
             return;
         }
         const observer = new MutationObserver((_, obs) => {
@@ -310,7 +331,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 clearTimeout(mutationTimeoutRef.current);
                 mutationTimeoutRef.current = null;
             }
-            showStep();
+            showStep(true);
             obs.disconnect();
             mutationObserverRef.current = null;
         });
@@ -326,22 +347,39 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             observer.disconnect();
             mutationObserverRef.current = null;
             mutationTimeoutRef.current = null;
+            onRouteTransitionTimeout?.(routeTransition);
             setCurrentStep(stepIndex);
+            onRouteTransitionComplete?.({
+                ...routeTransition,
+                targetFound: false,
+            });
         }, 5000);
-    }, [cleanupMutationObserver, currentTourSteps, scrollToElement, setCurrentStep]);
+    }, [
+        cleanupMutationObserver,
+        currentTourSteps,
+        onRouteTransitionComplete,
+        onRouteTransitionTimeout,
+        scrollToElement,
+        setCurrentStep,
+    ]);
     // Step Controls
     const nextStep = useCallback(async () => {
         if (!currentTourSteps)
             return;
         if (currentStep < currentTourSteps.length - 1) {
+            let routeTransition = null;
             try {
                 const nextStepIndex = currentStep + 1;
                 const route = currentTourSteps[currentStep].nextRoute;
                 navigationDirectionRef.current = "forward";
                 cleanupMutationObserver();
                 if (route) {
+                    routeTransition = getRouteTransition(nextStepIndex, route, "next");
+                    if (!routeTransition)
+                        return;
+                    onRouteTransitionStart?.(routeTransition);
                     await router.push(route);
-                    waitForRouteTarget(nextStepIndex);
+                    waitForRouteTarget(nextStepIndex, routeTransition);
                 }
                 else {
                     setCurrentStep(nextStepIndex);
@@ -349,6 +387,9 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 }
             }
             catch (error) {
+                if (routeTransition) {
+                    onRouteTransitionError?.(routeTransition, error);
+                }
                 console.error("Error navigating to next route", error);
             }
         }
@@ -359,7 +400,10 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         cleanupMutationObserver,
         currentStep,
         currentTourSteps,
+        getRouteTransition,
         handleComplete,
+        onRouteTransitionError,
+        onRouteTransitionStart,
         router,
         scrollToElement,
         setCurrentStep,
@@ -368,14 +412,19 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const prevStep = useCallback(async () => {
         if (!currentTourSteps || currentStep <= 0)
             return;
+        let routeTransition = null;
         try {
             const prevStepIndex = currentStep - 1;
             const route = currentTourSteps[currentStep].prevRoute;
             navigationDirectionRef.current = "backward";
             cleanupMutationObserver();
             if (route) {
+                routeTransition = getRouteTransition(prevStepIndex, route, "prev");
+                if (!routeTransition)
+                    return;
+                onRouteTransitionStart?.(routeTransition);
                 await router.push(route);
-                waitForRouteTarget(prevStepIndex);
+                waitForRouteTarget(prevStepIndex, routeTransition);
             }
             else {
                 setCurrentStep(prevStepIndex);
@@ -383,12 +432,18 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             }
         }
         catch (error) {
+            if (routeTransition) {
+                onRouteTransitionError?.(routeTransition, error);
+            }
             console.error("Error navigating to previous route", error);
         }
     }, [
         cleanupMutationObserver,
         currentStep,
         currentTourSteps,
+        getRouteTransition,
+        onRouteTransitionError,
+        onRouteTransitionStart,
         router,
         scrollToElement,
         setCurrentStep,

@@ -2,9 +2,15 @@ import React from "react";
 import { describe, expectTypeOf, it } from "vitest";
 import type {
   CardComponentProps,
+  OnbordaPersistedProgress,
+  OnbordaProgressPersistence,
+  OnbordaProgressStorage,
   OnbordaProps,
   OnbordaProviderProps,
   OnbordaState,
+  RouteTransition,
+  RouteTransitionComplete,
+  RouteTransitionDirection,
   TargetMissingPolicy,
 } from "./types";
 
@@ -27,6 +33,10 @@ describe("public types", () => {
       cardComponent: React.ComponentType<CardComponentProps>;
       targetMissingPolicy?: TargetMissingPolicy;
       onTargetMissing?: OnbordaProps["onTargetMissing"];
+      onRouteTransitionStart?: (transition: RouteTransition) => void;
+      onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
+      onRouteTransitionTimeout?: (transition: RouteTransition) => void;
+      onRouteTransitionError?: (transition: RouteTransition, error: unknown) => void;
     }>();
 
     const props = {
@@ -52,10 +62,32 @@ describe("public types", () => {
       defaultCurrentTour?: string | null;
       defaultCurrentStep?: number;
       defaultIsOnbordaVisible?: boolean;
+      progressPersistence?: OnbordaProgressPersistence;
       onCurrentTourChange?: (tour: string | null) => void;
       onCurrentStepChange?: (step: number) => void;
       onOpenChange?: (open: boolean) => void;
       onStateChange?: (state: OnbordaState) => void;
     }>();
+
+    expectTypeOf<OnbordaProgressStorage>().toMatchTypeOf<{
+      getItem: (key: string) => string | null;
+      setItem: (key: string, value: string) => void;
+      removeItem: (key: string) => void;
+    }>();
+
+    expectTypeOf<OnbordaPersistedProgress>().toMatchTypeOf<
+      OnbordaState & {
+        version: 1;
+        updatedAt: number;
+      }
+    >();
+
+    expectTypeOf<RouteTransitionDirection>().toEqualTypeOf<"next" | "prev">();
+
+    expectTypeOf<RouteTransitionComplete>().toMatchTypeOf<
+      RouteTransition & {
+        targetFound: boolean;
+      }
+    >();
   });
 });
