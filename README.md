@@ -47,6 +47,86 @@ import type { CardComponentProps, Tour } from "onborda/types";
 
 The package publishes ESM, explicit `exports`, and `sideEffects: false` so Next.js and other modern bundlers can remove unused exports.
 
+### Controlled and uncontrolled state
+`OnbordaProvider` works uncontrolled by default. Use `useOnborda()` to start, close, and move tours from inside your app:
+
+```tsx
+<OnbordaProvider>
+  <Onborda steps={steps} cardComponent={CustomCard}>
+    {children}
+  </Onborda>
+</OnbordaProvider>
+```
+
+You can also set uncontrolled initial state with `default*` props:
+
+```tsx
+<OnbordaProvider
+  defaultCurrentTour="firsttour"
+  defaultCurrentStep={0}
+  defaultIsOnbordaVisible
+>
+  <Onborda steps={steps} cardComponent={CustomCard}>
+    {children}
+  </Onborda>
+</OnbordaProvider>
+```
+
+For persisted progress, URL-driven tours, or product analytics flows, control the state from a parent component. When a controlled prop is provided, Onborda calls the matching change callback and waits for the parent to update the prop:
+
+```tsx
+"use client";
+
+import { useState } from "react";
+import { OnbordaProvider, Onborda } from "onborda";
+import type { OnbordaState } from "onborda";
+
+export function ControlledTour({ children }: { children: React.ReactNode }) {
+  const [onborda, setOnborda] = useState<OnbordaState>({
+    currentTour: null,
+    currentStep: 0,
+    isOnbordaVisible: false,
+  });
+
+  return (
+    <OnbordaProvider
+      currentTour={onborda.currentTour}
+      currentStep={onborda.currentStep}
+      isOnbordaVisible={onborda.isOnbordaVisible}
+      onCurrentTourChange={(currentTour) =>
+        setOnborda((state) => ({ ...state, currentTour }))
+      }
+      onCurrentStepChange={(currentStep) =>
+        setOnborda((state) => ({ ...state, currentStep }))
+      }
+      onOpenChange={(isOnbordaVisible) =>
+        setOnborda((state) => ({ ...state, isOnbordaVisible }))
+      }
+      onStateChange={(state) => {
+        // Optional: persist or track the full next state.
+      }}
+    >
+      <Onborda steps={steps} cardComponent={CustomCard}>
+        {children}
+      </Onborda>
+    </OnbordaProvider>
+  );
+}
+```
+
+| Provider prop              | Type                              | Description |
+|----------------------------|-----------------------------------|-------------|
+| `currentTour`              | `string \| null`                  | Controlled active tour name. Use `null` when no tour is active. |
+| `currentStep`              | `number`                          | Controlled active step index. |
+| `isOnbordaVisible`         | `boolean`                         | Controlled open state. |
+| `defaultCurrentTour`       | `string \| null`                  | Initial tour name for uncontrolled usage. Defaults to `null`. |
+| `defaultCurrentStep`       | `number`                          | Initial step index for uncontrolled usage. Defaults to `0`. |
+| `defaultIsOnbordaVisible`  | `boolean`                         | Initial open state for uncontrolled usage. Defaults to `false`. |
+| `onCurrentTourChange`      | `(tour: string \| null) => void`  | Called when Onborda requests a tour change. |
+| `onCurrentStepChange`      | `(step: number) => void`          | Called when Onborda requests a step change. |
+| `onOpenChange`             | `(open: boolean) => void`         | Called when Onborda requests an open/closed state change. |
+| `onStateChange`            | `(state: OnbordaState) => void`   | Called with the complete next state for each Onborda action. |
+
 ### Tailwind config
 Tailwind CSS will need to scan the node module in order to include the classes used by the overlay wrapper. See [configuring source paths](https://tailwindcss.com/docs/content-configuration#configuring-source-paths) for more information about this topic.
 

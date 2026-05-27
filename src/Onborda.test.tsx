@@ -5,7 +5,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Onborda from "./Onborda";
 import { OnbordaProvider, useOnborda } from "./OnbordaContext";
-import type { CardComponentProps, Tour } from "./types";
+import type { CardComponentProps, OnbordaState, Tour } from "./types";
 
 const pushMock = vi.fn();
 
@@ -158,6 +158,50 @@ function renderManualOnborda({
   };
 }
 
+function ControlledOnborda({
+  initialState,
+  onCurrentTourChange,
+  onCurrentStepChange,
+  onOpenChange,
+  onStateChange,
+}: {
+  initialState: OnbordaState;
+  onCurrentTourChange?: (tour: string | null) => void;
+  onCurrentStepChange?: (step: number) => void;
+  onOpenChange?: (open: boolean) => void;
+  onStateChange?: (state: OnbordaState) => void;
+}) {
+  const [state, setState] = React.useState(initialState);
+
+  return (
+    <OnbordaProvider
+      currentTour={state.currentTour}
+      currentStep={state.currentStep}
+      isOnbordaVisible={state.isOnbordaVisible}
+      onCurrentTourChange={(tour) => {
+        onCurrentTourChange?.(tour);
+        setState((current) => ({ ...current, currentTour: tour }));
+      }}
+      onCurrentStepChange={(step) => {
+        onCurrentStepChange?.(step);
+        setState((current) => ({ ...current, currentStep: step }));
+      }}
+      onOpenChange={(open) => {
+        onOpenChange?.(open);
+        setState((current) => ({ ...current, isOnbordaVisible: open }));
+      }}
+      onStateChange={onStateChange}
+    >
+      <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+        Target
+      </div>
+      <Onborda steps={tours} interact cardComponent={TestCard}>
+        <div />
+      </Onborda>
+    </OnbordaProvider>
+  );
+}
+
 describe("Onborda", () => {
   it("passes the expanded card props when the target exists", async () => {
     renderOnborda();
@@ -217,5 +261,88 @@ describe("Onborda", () => {
     });
     expect(onTourSkip).toHaveBeenCalledWith("main", 0);
     expect(startButton).toHaveFocus();
+  });
+
+  it("supports uncontrolled default provider state", async () => {
+    render(
+      <OnbordaProvider
+        defaultCurrentTour="main"
+        defaultCurrentStep={1}
+        defaultIsOnbordaVisible
+      >
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda steps={tours} interact cardComponent={TestCard}>
+          <div />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
+    expect(screen.getByText("target-missing")).toBeInTheDocument();
+  });
+
+  it("supports externally controlled step changes", async () => {
+    const onCurrentStepChange = vi.fn();
+    const onStateChange = vi.fn();
+
+    render(
+      <ControlledOnborda
+        initialState={{
+          currentTour: "main",
+          currentStep: 0,
+          isOnbordaVisible: true,
+        }}
+        onCurrentStepChange={onCurrentStepChange}
+        onStateChange={onStateChange}
+      />
+    );
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(onCurrentStepChange).toHaveBeenCalledWith(1);
+    expect(onStateChange).toHaveBeenCalledWith({
+      currentTour: "main",
+      currentStep: 1,
+      isOnbordaVisible: true,
+    });
+    expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
+  });
+
+  it("supports externally controlled open state when closing", async () => {
+    const onCurrentTourChange = vi.fn();
+    const onOpenChange = vi.fn();
+    const onStateChange = vi.fn();
+
+    render(
+      <ControlledOnborda
+        initialState={{
+          currentTour: "main",
+          currentStep: 0,
+          isOnbordaVisible: true,
+        }}
+        onCurrentTourChange={onCurrentTourChange}
+        onOpenChange={onOpenChange}
+        onStateChange={onStateChange}
+      />
+    );
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onCurrentTourChange).toHaveBeenCalledWith(null);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onStateChange).toHaveBeenCalledWith({
+      currentTour: null,
+      currentStep: 0,
+      isOnbordaVisible: false,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 });

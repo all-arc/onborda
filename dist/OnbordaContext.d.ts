@@ -1,7 +1,5 @@
 import React from "react";
-import { OnbordaContextType } from "./types/index.js";
+import { OnbordaContextType, OnbordaProviderProps } from "./types/index.js";
 declare const useOnborda: () => OnbordaContextType;
-declare const OnbordaProvider: React.FC<{
-    children: React.ReactNode;
-}>;
+declare const OnbordaProvider: React.FC<OnbordaProviderProps>;
 export { OnbordaProvider, useOnborda };

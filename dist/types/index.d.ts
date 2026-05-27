@@ -7,6 +7,24 @@ export interface OnbordaContextType {
     startOnborda: (tourName: string) => void;
     isOnbordaVisible: boolean;
 }
+export interface OnbordaState {
+    currentTour: string | null;
+    currentStep: number;
+    isOnbordaVisible: boolean;
+}
+export interface OnbordaProviderProps {
+    children: React.ReactNode;
+    currentTour?: string | null;
+    currentStep?: number;
+    isOnbordaVisible?: boolean;
+    defaultCurrentTour?: string | null;
+    defaultCurrentStep?: number;
+    defaultIsOnbordaVisible?: boolean;
+    onCurrentTourChange?: (tour: string | null) => void;
+    onCurrentStepChange?: (step: number) => void;
+    onOpenChange?: (open: boolean) => void;
+    onStateChange?: (state: OnbordaState) => void;
+}
 export interface Step {
     icon?: React.ReactNode | string | null;
     title: string;

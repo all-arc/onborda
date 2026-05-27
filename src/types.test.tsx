@@ -1,6 +1,11 @@
 import React from "react";
 import { describe, expectTypeOf, it } from "vitest";
-import type { CardComponentProps, OnbordaProps } from "./types";
+import type {
+  CardComponentProps,
+  OnbordaProps,
+  OnbordaProviderProps,
+  OnbordaState,
+} from "./types";
 
 function Card(_: CardComponentProps) {
   return null;
@@ -28,5 +33,26 @@ describe("public types", () => {
     } satisfies OnbordaProps;
 
     expectTypeOf(props.cardComponent).toEqualTypeOf<typeof Card>();
+  });
+
+  it("exposes controlled and uncontrolled provider props", () => {
+    expectTypeOf<OnbordaState>().toEqualTypeOf<{
+      currentTour: string | null;
+      currentStep: number;
+      isOnbordaVisible: boolean;
+    }>();
+
+    expectTypeOf<OnbordaProviderProps>().toMatchTypeOf<{
+      currentTour?: string | null;
+      currentStep?: number;
+      isOnbordaVisible?: boolean;
+      defaultCurrentTour?: string | null;
+      defaultCurrentStep?: number;
+      defaultIsOnbordaVisible?: boolean;
+      onCurrentTourChange?: (tour: string | null) => void;
+      onCurrentStepChange?: (step: number) => void;
+      onOpenChange?: (open: boolean) => void;
+      onStateChange?: (state: OnbordaState) => void;
+    }>();
   });
 });
