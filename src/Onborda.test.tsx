@@ -26,7 +26,21 @@ afterEach(() => {
   cleanup();
   pushMock.mockClear();
   vi.useRealTimers();
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: 1024,
+  });
 });
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+  fireEvent(window, new Event("resize"));
+}
 
 function createMemoryStorage(initialValues: Record<string, string> = {}): OnbordaProgressStorage {
   const values = new Map(Object.entries(initialValues));
@@ -57,6 +71,21 @@ const tours: Tour[] = [
         content: "Missing content",
         selector: "#missing-target",
         side: "right",
+      },
+    ],
+  },
+];
+
+const mobilePlacementTours: Tour[] = [
+  {
+    tour: "main",
+    steps: [
+      {
+        title: "Mobile placement step",
+        content: "Mobile placement content",
+        selector: "#first-target",
+        side: "bottom",
+        mobileSide: "top",
       },
     ],
   },
@@ -1208,5 +1237,56 @@ describe("Onborda", () => {
     );
 
     debugSpy.mockRestore();
+  });
+
+  it("uses a step mobileSide placement on mobile viewports", async () => {
+    setViewportWidth(480);
+
+    render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda steps={mobilePlacementTours} interact cardComponent={TestCard}>
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Mobile placement step" })).toBeInTheDocument();
+    expect(screen.getByText("arrow-present")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-placement", "top");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-mobile-placement", "top");
+  });
+
+  it("supports the center mobile placement preset while keeping target state", async () => {
+    setViewportWidth(480);
+
+    render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda
+          steps={tours}
+          interact
+          cardComponent={TestCard}
+          mobilePlacement="center"
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+    expect(screen.getByText("target-found")).toBeInTheDocument();
+    expect(screen.getByText("arrow-missing")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-placement", "center");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-mobile-placement", "center");
+    expect(document.querySelector("[data-name='onborda-card-wrapper']")).toHaveStyle({
+      position: "fixed",
+      top: "50%",
+      left: "50%",
+    });
   });
 });

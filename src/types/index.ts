@@ -68,6 +68,38 @@ export type StepCondition =
   | boolean
   | ((context: StepConditionContext) => boolean);
 
+export type OnbordaPlacementSide =
+  | "top"
+  | "bottom"
+  | "left"
+  | "right"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "left-top"
+  | "left-bottom"
+  | "right-top"
+  | "right-bottom";
+
+export type OnbordaMobilePlacementPreset =
+  | "auto"
+  | "top"
+  | "bottom"
+  | "center";
+
+export interface OnbordaMobilePlacementOptions {
+  breakpoint?: number;
+  placement?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
+  fallbackPlacements?: OnbordaPlacementSide[];
+  offset?: number;
+  shiftPadding?: number;
+}
+
+export type OnbordaMobilePlacement =
+  | OnbordaMobilePlacementPreset
+  | OnbordaMobilePlacementOptions;
+
 // Step
 export interface Step {
   // Step Content
@@ -76,7 +108,8 @@ export interface Step {
   content: React.ReactNode;
   selector: string;
   // Options
-  side?: "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | "left-top" | "left-bottom" | "right-top" | "right-bottom";
+  side?: OnbordaPlacementSide;
+  mobileSide?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
   showControls?: boolean;
   pointerPadding?: number;
   pointerRadius?: number;
@@ -237,6 +270,7 @@ export interface OnbordaProps {
   cardComponent: React.ComponentType<CardComponentProps>;
   targetMissingPolicy?: TargetMissingPolicy;
   accessibility?: OnbordaAccessibilityOptions;
+  mobilePlacement?: OnbordaMobilePlacement;
   devWarnings?: boolean;
   debug?: boolean | OnbordaDebugOptions;
   // Callbacks

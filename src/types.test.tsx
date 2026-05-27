@@ -9,6 +9,10 @@ import type {
   OnbordaDebugEvent,
   OnbordaDebugOptions,
   OnbordaHeadlessHelpers,
+  OnbordaMobilePlacement,
+  OnbordaMobilePlacementOptions,
+  OnbordaMobilePlacementPreset,
+  OnbordaPlacementSide,
   OnbordaPersistedProgress,
   OnbordaProgressPersistence,
   OnbordaProgressStorage,
@@ -45,6 +49,7 @@ describe("public types", () => {
       cardComponent: React.ComponentType<CardComponentProps>;
       targetMissingPolicy?: TargetMissingPolicy;
       accessibility?: OnbordaAccessibilityOptions;
+      mobilePlacement?: OnbordaMobilePlacement;
       devWarnings?: boolean;
       debug?: boolean | OnbordaDebugOptions;
       onTargetMissing?: OnbordaProps["onTargetMissing"];
@@ -62,6 +67,11 @@ describe("public types", () => {
       children: null,
       steps: [],
       cardComponent: Card,
+      mobilePlacement: {
+        breakpoint: 640,
+        placement: "bottom",
+        fallbackPlacements: ["bottom", "top"],
+      },
     } satisfies OnbordaProps;
 
     expectTypeOf(props.cardComponent).toEqualTypeOf<typeof Card>();
@@ -135,6 +145,37 @@ describe("public types", () => {
       getPrevButtonProps: OnbordaHeadlessHelpers["getPrevButtonProps"];
       getSkipButtonProps: OnbordaHeadlessHelpers["getSkipButtonProps"];
       getCloseButtonProps: OnbordaHeadlessHelpers["getCloseButtonProps"];
+    }>();
+
+    expectTypeOf<OnbordaPlacementSide>().toEqualTypeOf<
+      | "top"
+      | "bottom"
+      | "left"
+      | "right"
+      | "top-left"
+      | "top-right"
+      | "bottom-left"
+      | "bottom-right"
+      | "left-top"
+      | "left-bottom"
+      | "right-top"
+      | "right-bottom"
+    >();
+
+    expectTypeOf<OnbordaMobilePlacementPreset>().toEqualTypeOf<
+      "auto" | "top" | "bottom" | "center"
+    >();
+
+    expectTypeOf<OnbordaMobilePlacementOptions>().toMatchTypeOf<{
+      breakpoint?: number;
+      placement?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
+      fallbackPlacements?: OnbordaPlacementSide[];
+      offset?: number;
+      shiftPadding?: number;
+    }>();
+
+    expectTypeOf<Tour["steps"][number]>().toMatchTypeOf<{
+      mobileSide?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
     }>();
 
     expectTypeOf<OnbordaContextType>().toMatchTypeOf<{

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";
 import { FloatingFocusManager, useFloating, offset as floatingOffset, flip, shift, arrow, autoUpdate, } from "@floating-ui/react";
 const offset = 20;
+const defaultMobileBreakpoint = 768;
 const placementMap = {
     "top": "top",
     "bottom": "bottom",
@@ -63,6 +64,17 @@ const filterConditionalSteps = (tours) => tours.map((tour) => ({
     steps: tour.steps.filter((step, stepIndex) => shouldIncludeStep(tour.tour, step, stepIndex)),
 }));
 const getNow = () => Date.now();
+const getViewportWidth = () => typeof window === "undefined" ? null : window.innerWidth;
+const normalizeMobilePlacement = (mobilePlacement) => {
+    if (!mobilePlacement)
+        return {};
+    if (typeof mobilePlacement === "string") {
+        return {
+            placement: mobilePlacement,
+        };
+    }
+    return mobilePlacement;
+};
 const getNodeEnv = () => globalThis.process?.env
     ?.NODE_ENV;
 const callButtonAction = (event, props, action) => {
@@ -80,9 +92,10 @@ const createHeadlessButtonProps = (props, action, defaults) => ({
         callButtonAction(event, props, action);
     },
 });
-const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, devWarnings, debug, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onStepsLoadStart, onStepsLoadSuccess, onStepsLoadError, onAnalyticsEvent, onTourComplete, onTourSkip, }) => {
+const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, mobilePlacement, devWarnings, debug, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onStepsLoadStart, onStepsLoadSuccess, onStepsLoadError, onAnalyticsEvent, onTourComplete, onTourSkip, }) => {
     const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda, registeredTours, } = useOnborda();
     const [asyncTours, setAsyncTours] = useState([]);
+    const [viewportWidth, setViewportWidth] = useState(() => getViewportWidth());
     const propTours = Array.isArray(steps) ? steps : asyncTours;
     const availableTours = useMemo(() => filterConditionalSteps(mergeTours([registeredTours, propTours])), [propTours, registeredTours]);
     const currentTourSteps = useMemo(() => availableTours.find((tour) => tour.tour === currentTour)?.steps, [availableTours, currentTour]);
@@ -199,6 +212,18 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         steps,
         warnDev,
     ]);
+    const mobilePlacementOptions = useMemo(() => normalizeMobilePlacement(mobilePlacement), [mobilePlacement]);
+    const hasMobilePlacement = mobilePlacement !== undefined || activeStep?.mobileSide !== undefined;
+    useEffect(() => {
+        if (!hasMobilePlacement)
+            return;
+        const updateViewportWidth = () => {
+            setViewportWidth(getViewportWidth());
+        };
+        updateViewportWidth();
+        window.addEventListener("resize", updateViewportWidth);
+        return () => window.removeEventListener("resize", updateViewportWidth);
+    }, [hasMobilePlacement]);
     const updatePointerPosition = useCallback((element = currentElementRef.current) => {
         if (!element) {
             setPointerPosition(null);
@@ -207,15 +232,35 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         setPointerPosition(getElementRect(element));
     }, []);
     // Floating UI Setup
-    const placement = activeStep?.side ? placementMap[activeStep.side] : "bottom";
+    const mobileBreakpoint = mobilePlacementOptions.breakpoint ?? defaultMobileBreakpoint;
+    const isMobileViewport = hasMobilePlacement &&
+        viewportWidth !== null &&
+        viewportWidth <= mobileBreakpoint;
+    const mobilePlacementValue = activeStep?.mobileSide ?? mobilePlacementOptions.placement ?? "bottom";
+    const desktopPlacementSide = activeStep?.side ?? "bottom";
+    const effectivePlacementValue = isMobileViewport
+        ? mobilePlacementValue
+        : desktopPlacementSide;
+    const isMobileCenterPlacement = isMobileViewport && effectivePlacementValue === "center";
+    const effectivePlacementSide = effectivePlacementValue === "auto" || effectivePlacementValue === "center"
+        ? desktopPlacementSide
+        : effectivePlacementValue;
+    const placement = placementMap[effectivePlacementSide];
+    const fallbackPlacementSides = isMobileViewport && mobilePlacementOptions.fallbackPlacements
+        ? mobilePlacementOptions.fallbackPlacements
+        : isMobileViewport
+            ? ["bottom", "top"]
+            : ["bottom", "top", "right", "left"];
+    const floatingOffsetValue = isMobileViewport ? mobilePlacementOptions.offset ?? 16 : 25;
+    const shiftPadding = isMobileViewport ? mobilePlacementOptions.shiftPadding ?? 12 : 10;
     const floatingMiddleware = useMemo(() => [
-        floatingOffset(25),
+        floatingOffset(floatingOffsetValue),
         flip({
-            fallbackPlacements: ["bottom", "top", "right", "left"],
+            fallbackPlacements: fallbackPlacementSides.map((side) => placementMap[side]),
         }),
-        shift({ padding: 10 }),
+        shift({ padding: shiftPadding }),
         arrow({ element: arrowRef }),
-    ], []);
+    ], [fallbackPlacementSides, floatingOffsetValue, shiftPadding]);
     const { refs, floatingStyles, middlewareData, placement: finalPlacement, context } = useFloating({
         placement,
         whileElementsMounted: (reference, floating, update) => autoUpdate(reference, floating, () => {
@@ -832,6 +877,9 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const pointerPadOffset = pointerPadding / 2;
     const pointerRadius = activeStep?.pointerRadius ?? 28;
     const targetFound = targetStatus === "found" && !!pointerPosition;
+    const useFloatingCardPosition = targetFound && !isMobileCenterPlacement;
+    const renderedPlacement = isMobileCenterPlacement ? "center" : effectivePlacementSide;
+    const renderedMobilePlacement = isMobileViewport ? effectivePlacementValue : undefined;
     const totalSteps = currentTourSteps?.length ?? 0;
     const isFirstStep = currentStep === 0;
     const isLastStep = currentStep === totalSteps - 1;
@@ -921,8 +969,8 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         transform: "translate(-50%, -50%)",
     };
     return (_jsxs("div", { "data-name": "onborda-wrapper", className: "relative w-full", "data-onborda-debug": debugEnabled ? "true" : undefined, children: [_jsx("div", { "data-name": "onborda-site", className: "block w-full", children: children }), isOnbordaVisible && activeStep && CardComponent && (_jsxs(Portal, { children: [!interact && (_jsx("div", { className: "fixed inset-0 z-[890]", onClick: handleSkip })), _jsxs(motion.svg, { className: "fixed inset-0 w-full h-full z-[900] pointer-events-none", initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.3 }, "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("mask", { id: maskId, children: [_jsx("rect", { width: "100%", height: "100%", fill: "white" }), pointerPosition && (activeStep.spotlightShape === "circle" ? (_jsx(motion.circle, { cx: pointerPosition.x + pointerPosition.width / 2, cy: pointerPosition.y + pointerPosition.height / 2, r: Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset, fill: "black", transition: cardTransition })) : (_jsx(motion.rect, { x: pointerPosition.x - pointerPadOffset, y: pointerPosition.y - pointerPadOffset, width: pointerPosition.width + pointerPadding, height: pointerPosition.height + pointerPadding, rx: pointerRadius, ry: pointerRadius, fill: "black", transition: cardTransition })))] }) }), _jsx("rect", { width: "100%", height: "100%", fill: `rgba(${shadowRgb}, ${shadowOpacity})`, mask: `url(#${maskId})`, className: "pointer-events-auto" })] }), _jsx(FloatingFocusManager, { context: context, modal: !interact, initialFocus: 0, returnFocus: returnFocusRef, restoreFocus: true, closeOnFocusOut: false, children: _jsx("div", { ref: refs.setFloating, style: {
-                                ...(targetFound ? floatingStyles : fallbackFloatingStyles),
+                                ...(useFloatingCardPosition ? floatingStyles : fallbackFloatingStyles),
                                 zIndex: 950,
-                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: targetFound ? _jsx(CardArrow, {}) : null, a11y: cardA11y, headless: headless })] }) }) })] }))] }));
+                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, "data-onborda-placement": renderedPlacement, "data-onborda-mobile-placement": renderedMobilePlacement, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: useFloatingCardPosition ? _jsx(CardArrow, {}) : null, a11y: cardA11y, headless: headless })] }) }) })] }))] }));
 };
 export default Onborda;

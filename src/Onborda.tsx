@@ -30,6 +30,8 @@ import {
   OnbordaDebugEvent,
   OnbordaHeadlessButtonProps,
   OnbordaHeadlessHelpers,
+  OnbordaMobilePlacement,
+  OnbordaPlacementSide,
   OnbordaProps,
   RouteTransition,
   RouteTransitionDirection,
@@ -59,8 +61,9 @@ type RuntimeProcess = {
 };
 
 const offset = 20;
+const defaultMobileBreakpoint = 768;
 
-const placementMap: Record<string, Placement> = {
+const placementMap: Record<OnbordaPlacementSide, Placement> = {
   "top": "top",
   "bottom": "bottom",
   "left": "left",
@@ -129,6 +132,21 @@ const filterConditionalSteps = (tours: Tour[]) =>
 
 const getNow = () => Date.now();
 
+const getViewportWidth = () =>
+  typeof window === "undefined" ? null : window.innerWidth;
+
+const normalizeMobilePlacement = (
+  mobilePlacement: OnbordaMobilePlacement | undefined
+) => {
+  if (!mobilePlacement) return {};
+  if (typeof mobilePlacement === "string") {
+    return {
+      placement: mobilePlacement,
+    };
+  }
+  return mobilePlacement;
+};
+
 const getNodeEnv = () =>
   (globalThis as typeof globalThis & { process?: RuntimeProcess }).process?.env
     ?.NODE_ENV;
@@ -168,6 +186,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   cardComponent: CardComponent,
   targetMissingPolicy = "fallback",
   accessibility,
+  mobilePlacement,
   devWarnings,
   debug,
   onTourStart,
@@ -194,6 +213,9 @@ const Onborda: React.FC<OnbordaProps> = ({
   } =
     useOnborda();
   const [asyncTours, setAsyncTours] = useState<Tour[]>([]);
+  const [viewportWidth, setViewportWidth] = useState<number | null>(() =>
+    getViewportWidth()
+  );
   const propTours = Array.isArray(steps) ? steps : asyncTours;
   const availableTours = useMemo(
     () => filterConditionalSteps(mergeTours([registeredTours, propTours])),
@@ -343,6 +365,25 @@ const Onborda: React.FC<OnbordaProps> = ({
     warnDev,
   ]);
 
+  const mobilePlacementOptions = useMemo(
+    () => normalizeMobilePlacement(mobilePlacement),
+    [mobilePlacement]
+  );
+  const hasMobilePlacement =
+    mobilePlacement !== undefined || activeStep?.mobileSide !== undefined;
+
+  useEffect(() => {
+    if (!hasMobilePlacement) return;
+
+    const updateViewportWidth = () => {
+      setViewportWidth(getViewportWidth());
+    };
+
+    updateViewportWidth();
+    window.addEventListener("resize", updateViewportWidth);
+    return () => window.removeEventListener("resize", updateViewportWidth);
+  }, [hasMobilePlacement]);
+
   const updatePointerPosition = useCallback((element: Element | null = currentElementRef.current) => {
     if (!element) {
       setPointerPosition(null);
@@ -353,18 +394,46 @@ const Onborda: React.FC<OnbordaProps> = ({
   }, []);
 
   // Floating UI Setup
-  const placement = activeStep?.side ? placementMap[activeStep.side] : "bottom";
+  const mobileBreakpoint =
+    mobilePlacementOptions.breakpoint ?? defaultMobileBreakpoint;
+  const isMobileViewport =
+    hasMobilePlacement &&
+    viewportWidth !== null &&
+    viewportWidth <= mobileBreakpoint;
+  const mobilePlacementValue =
+    activeStep?.mobileSide ?? mobilePlacementOptions.placement ?? "bottom";
+  const desktopPlacementSide = activeStep?.side ?? "bottom";
+  const effectivePlacementValue = isMobileViewport
+    ? mobilePlacementValue
+    : desktopPlacementSide;
+  const isMobileCenterPlacement =
+    isMobileViewport && effectivePlacementValue === "center";
+  const effectivePlacementSide: OnbordaPlacementSide =
+    effectivePlacementValue === "auto" || effectivePlacementValue === "center"
+      ? desktopPlacementSide
+      : effectivePlacementValue;
+  const placement = placementMap[effectivePlacementSide];
+  const fallbackPlacementSides =
+    isMobileViewport && mobilePlacementOptions.fallbackPlacements
+      ? mobilePlacementOptions.fallbackPlacements
+      : isMobileViewport
+        ? (["bottom", "top"] as OnbordaPlacementSide[])
+        : (["bottom", "top", "right", "left"] as OnbordaPlacementSide[]);
+  const floatingOffsetValue =
+    isMobileViewport ? mobilePlacementOptions.offset ?? 16 : 25;
+  const shiftPadding =
+    isMobileViewport ? mobilePlacementOptions.shiftPadding ?? 12 : 10;
 
   const floatingMiddleware = useMemo(
     () => [
-      floatingOffset(25),
+      floatingOffset(floatingOffsetValue),
       flip({
-        fallbackPlacements: ["bottom", "top", "right", "left"],
+        fallbackPlacements: fallbackPlacementSides.map((side) => placementMap[side]),
       }),
-      shift({ padding: 10 }),
+      shift({ padding: shiftPadding }),
       arrow({ element: arrowRef }),
     ],
-    []
+    [fallbackPlacementSides, floatingOffsetValue, shiftPadding]
   );
 
   const { refs, floatingStyles, middlewareData, placement: finalPlacement, context } = useFloating({
@@ -1069,6 +1138,9 @@ const Onborda: React.FC<OnbordaProps> = ({
   const pointerPadOffset = pointerPadding / 2;
   const pointerRadius = activeStep?.pointerRadius ?? 28;
   const targetFound = targetStatus === "found" && !!pointerPosition;
+  const useFloatingCardPosition = targetFound && !isMobileCenterPlacement;
+  const renderedPlacement = isMobileCenterPlacement ? "center" : effectivePlacementSide;
+  const renderedMobilePlacement = isMobileViewport ? effectivePlacementValue : undefined;
   const totalSteps = currentTourSteps?.length ?? 0;
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === totalSteps - 1;
@@ -1238,7 +1310,7 @@ const Onborda: React.FC<OnbordaProps> = ({
             <div
               ref={refs.setFloating}
               style={{
-                ...(targetFound ? floatingStyles : fallbackFloatingStyles),
+                ...(useFloatingCardPosition ? floatingStyles : fallbackFloatingStyles),
                 zIndex: 950,
               }}
               className="absolute flex flex-col pointer-events-auto"
@@ -1254,6 +1326,8 @@ const Onborda: React.FC<OnbordaProps> = ({
                 aria-labelledby={ariaLabelledBy}
                 aria-describedby={ariaDescribedBy}
                 aria-modal={ariaModal}
+                data-onborda-placement={renderedPlacement}
+                data-onborda-mobile-placement={renderedMobilePlacement}
                 tabIndex={-1}
               >
                 {liveRegion !== "off" && (
@@ -1272,7 +1346,7 @@ const Onborda: React.FC<OnbordaProps> = ({
                   isFirstStep={isFirstStep}
                   isLastStep={isLastStep}
                   targetFound={targetFound}
-                  arrow={targetFound ? <CardArrow /> : null}
+                  arrow={useFloatingCardPosition ? <CardArrow /> : null}
                   a11y={cardA11y}
                   headless={headless}
                 />

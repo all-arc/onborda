@@ -288,6 +288,27 @@ Set `devWarnings` when you want runtime warnings for configuration issues while 
 
 Warnings are deduped by issue and cover invalid selectors, missing active tours, empty tours, async loader failures, and missing targets. Route target timeouts still use `console.warn` even without `devWarnings`.
 
+### Mobile placement presets
+Use `mobilePlacement` when the card should use a different placement on narrow screens. The default breakpoint is `768px`.
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  mobilePlacement={{
+    breakpoint: 640,
+    placement: "bottom",
+    fallbackPlacements: ["bottom", "top"],
+    offset: 16,
+    shiftPadding: 12,
+  }}
+>
+  {children}
+</Onborda>
+```
+
+Supported presets are `"auto"`, `"top"`, `"bottom"`, and `"center"`. `"auto"` keeps the step's desktop `side`, while `"center"` keeps the target spotlight but renders the card in the viewport center with `arrow: null`. Use `step.mobileSide` when a specific step needs to override the global mobile preset.
+
 ### Target missing policy
 By default, if a step selector does not match an element, Onborda keeps the tour open and renders the same custom card in the center of the viewport with `targetFound: false` and `arrow: null`.
 
@@ -488,6 +509,7 @@ const steps: Tour[] = [
 | `content`        | `React.ReactNode`               | The main content or body of the step.                                                 |
 | `selector`       | `string`                        | A CSS selector string targeting the HTML element this step highlights (e.g. `#my-element`).            |
 | `side`           | `"top"` \| `"bottom"` \| `"left"` \| `"right"` \| `"top-left"` \| `"top-right"` \| `"bottom-left"` \| `"bottom-right"` \| `"left-top"` \| `"left-bottom"` \| `"right-top"` \| `"right-bottom"` | Optional. Determines where the tooltip should appear relative to the selector. Defaults to `"bottom"`. |
+| `mobileSide`     | `"auto"` \| `"top"` \| `"bottom"` \| `"center"` \| any `side` value | Optional. Overrides `side` and the global `mobilePlacement` for this step on mobile viewports. |
 | `showControls`   | `boolean`                       | Optional metadata you can use inside your custom card component to decide whether controls should be shown.           |
 | `pointerPadding` | `number`                        | Optional. The padding around the spotlight (keyhole) highlighting the target element. Defaults to `30`. |
 | `pointerRadius`  | `number`                        | Optional. The border-radius of the spotlight highlighting the target element. Defaults to `28`. |
@@ -554,6 +576,7 @@ export const steps: Tour[] = [
 | `cardTransition`| `Transition`          | Transitions between steps. Accepts framer-motion `Transition` configurations. Example: `{{ type: "spring" }}`. |
 | `targetMissingPolicy` | `"fallback"` \| `"skip-step"` \| `"skip-tour"` | Optional. Controls what happens when the current step selector does not match an element. Defaults to `"fallback"`. |
 | `accessibility` | `OnbordaAccessibilityOptions` | Optional. Controls dialog role, aria labels, aria descriptions, modal semantics, progress text, and live region announcements. |
+| `mobilePlacement` | `OnbordaMobilePlacement` | Optional. Changes card placement below a mobile breakpoint. Accepts `"auto"`, `"top"`, `"bottom"`, `"center"`, or an options object. |
 | `devWarnings` | `boolean` | Optional. Enables one-time development warnings for invalid selectors, missing tours, empty tours, async loader errors, and missing targets. Enabled automatically in React/Next development mode. |
 | `debug` | `boolean \| OnbordaDebugOptions` | Optional. Enables debug events and namespaced `console.debug` output. Passing `debug={{ log: false, onEvent }}` captures events without console output. |
 | `onStepsLoadStart` | `() => void` | Optional. Callback function triggered before an async `steps` loader runs. |
