@@ -4,7 +4,11 @@ import type {
   CardComponentProps,
   OnbordaAccessibilityContext,
   OnbordaAccessibilityOptions,
+  OnbordaAnalyticsEvent,
   OnbordaCardAccessibilityProps,
+  OnbordaDebugEvent,
+  OnbordaDebugOptions,
+  OnbordaHeadlessHelpers,
   OnbordaPersistedProgress,
   OnbordaProgressPersistence,
   OnbordaProgressStorage,
@@ -15,6 +19,8 @@ import type {
   RouteTransitionComplete,
   RouteTransitionDirection,
   TargetMissingPolicy,
+  Tour,
+  TourResolver,
 } from "./types";
 
 function Card(_: CardComponentProps) {
@@ -31,13 +37,21 @@ describe("public types", () => {
       targetFound: boolean;
       arrow?: React.ReactElement | null;
       a11y: OnbordaCardAccessibilityProps;
+      headless: OnbordaHeadlessHelpers;
     }>();
 
     expectTypeOf<OnbordaProps>().toMatchTypeOf<{
+      steps?: Tour[] | TourResolver;
       cardComponent: React.ComponentType<CardComponentProps>;
       targetMissingPolicy?: TargetMissingPolicy;
       accessibility?: OnbordaAccessibilityOptions;
+      devWarnings?: boolean;
+      debug?: boolean | OnbordaDebugOptions;
       onTargetMissing?: OnbordaProps["onTargetMissing"];
+      onStepsLoadStart?: () => void;
+      onStepsLoadSuccess?: (tours: Tour[]) => void;
+      onStepsLoadError?: (error: unknown) => void;
+      onAnalyticsEvent?: (event: OnbordaAnalyticsEvent) => void;
       onRouteTransitionStart?: (transition: RouteTransition) => void;
       onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
       onRouteTransitionTimeout?: (transition: RouteTransition) => void;
@@ -72,6 +86,7 @@ describe("public types", () => {
       onCurrentStepChange?: (step: number) => void;
       onOpenChange?: (open: boolean) => void;
       onStateChange?: (state: OnbordaState) => void;
+      initialTours?: Tour[];
     }>();
 
     expectTypeOf<OnbordaProgressStorage>().toMatchTypeOf<{
@@ -104,6 +119,29 @@ describe("public types", () => {
       useCardLabelIds?: boolean;
       progressText?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
       liveRegion?: "off" | "polite" | "assertive";
+    }>();
+
+    expectTypeOf<OnbordaDebugOptions>().toMatchTypeOf<{
+      enabled?: boolean;
+      log?: boolean;
+      onEvent?: (event: OnbordaDebugEvent) => void;
+    }>();
+
+    expectTypeOf<OnbordaHeadlessHelpers>().toMatchTypeOf<{
+      progressText: string;
+      canGoNext: boolean;
+      canGoPrev: boolean;
+      getNextButtonProps: OnbordaHeadlessHelpers["getNextButtonProps"];
+      getPrevButtonProps: OnbordaHeadlessHelpers["getPrevButtonProps"];
+      getSkipButtonProps: OnbordaHeadlessHelpers["getSkipButtonProps"];
+      getCloseButtonProps: OnbordaHeadlessHelpers["getCloseButtonProps"];
+    }>();
+
+    expectTypeOf<OnbordaContextType>().toMatchTypeOf<{
+      registeredTours: Tour[];
+      registerTour: (tour: Tour) => () => void;
+      registerTours: (tours: Tour[]) => () => void;
+      unregisterTour: (tourName: string) => void;
     }>();
   });
 });

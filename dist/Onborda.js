@@ -44,9 +44,48 @@ const resolveA11yText = (value, context) => {
         return value(context);
     return value;
 };
-const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onTourComplete, onTourSkip, }) => {
-    const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda } = useOnborda();
-    const currentTourSteps = useMemo(() => steps.find((tour) => tour.tour === currentTour)?.steps, [currentTour, steps]);
+const mergeTours = (tourGroups) => {
+    const tourMap = new Map();
+    tourGroups.flat().forEach((tour) => {
+        tourMap.set(tour.tour, tour);
+    });
+    return Array.from(tourMap.values());
+};
+const shouldIncludeStep = (tourName, step, stepIndex) => {
+    if (step.when === undefined)
+        return true;
+    if (typeof step.when === "boolean")
+        return step.when;
+    return step.when({ tour: tourName, step, stepIndex });
+};
+const filterConditionalSteps = (tours) => tours.map((tour) => ({
+    ...tour,
+    steps: tour.steps.filter((step, stepIndex) => shouldIncludeStep(tour.tour, step, stepIndex)),
+}));
+const getNow = () => Date.now();
+const getNodeEnv = () => globalThis.process?.env
+    ?.NODE_ENV;
+const callButtonAction = (event, props, action) => {
+    props?.onClick?.(event);
+    if (!event.defaultPrevented) {
+        action();
+    }
+};
+const createHeadlessButtonProps = (props, action, defaults) => ({
+    ...props,
+    type: props?.type ?? defaults.type ?? "button",
+    disabled: props?.disabled ?? defaults.disabled,
+    "aria-label": props?.["aria-label"] ?? defaults["aria-label"],
+    onClick: (event) => {
+        callButtonAction(event, props, action);
+    },
+});
+const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, devWarnings, debug, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onStepsLoadStart, onStepsLoadSuccess, onStepsLoadError, onAnalyticsEvent, onTourComplete, onTourSkip, }) => {
+    const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda, registeredTours, } = useOnborda();
+    const [asyncTours, setAsyncTours] = useState([]);
+    const propTours = Array.isArray(steps) ? steps : asyncTours;
+    const availableTours = useMemo(() => filterConditionalSteps(mergeTours([registeredTours, propTours])), [propTours, registeredTours]);
+    const currentTourSteps = useMemo(() => availableTours.find((tour) => tour.tour === currentTour)?.steps, [availableTours, currentTour]);
     const activeStep = currentTourSteps?.[currentStep];
     const [pointerPosition, setPointerPosition] = useState(null);
     const [targetStatus, setTargetStatus] = useState("unknown");
@@ -60,12 +99,106 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const wasVisibleRef = useRef(false);
     const navigationDirectionRef = useRef("forward");
     const lastMissingTargetRef = useRef(null);
+    const devWarningKeysRef = useRef(new Set());
     const maskId = useId();
     const dialogId = useId();
     const titleId = useId();
     const descriptionId = useId();
     // Route Changes
     const router = useRouter();
+    const debugOptions = typeof debug === "object" ? debug : undefined;
+    const debugEnabled = typeof debug === "boolean"
+        ? debug
+        : debugOptions?.enabled ?? !!debugOptions;
+    const debugShouldLog = debugOptions?.log ?? debugEnabled;
+    const shouldShowDevWarnings = devWarnings ?? (debugEnabled || getNodeEnv() === "development");
+    const emitDebug = useCallback((event) => {
+        if (!debugEnabled)
+            return;
+        const debugEvent = {
+            ...event,
+            timestamp: getNow(),
+        };
+        debugOptions?.onEvent?.(debugEvent);
+        if (debugShouldLog) {
+            console.debug(`[Onborda] ${event.message}`, event.data ?? "");
+        }
+    }, [debugEnabled, debugOptions, debugShouldLog]);
+    const warnDev = useCallback((key, message, data) => {
+        if (!shouldShowDevWarnings || devWarningKeysRef.current.has(key))
+            return;
+        devWarningKeysRef.current.add(key);
+        console.warn(`Onborda: ${message}`, data ?? "");
+        emitDebug({
+            type: "dev_warning",
+            message,
+            data,
+        });
+    }, [emitDebug, shouldShowDevWarnings]);
+    const querySelector = useCallback((selector, context) => {
+        try {
+            return document.querySelector(selector);
+        }
+        catch (error) {
+            warnDev(`invalid-selector:${selector}:${context}`, `Invalid selector "${selector}" in ${context}.`, { selector, context, error });
+            return null;
+        }
+    }, [warnDev]);
+    const emitAnalytics = useCallback((event) => {
+        const analyticsEvent = {
+            ...event,
+            timestamp: getNow(),
+        };
+        onAnalyticsEvent?.(analyticsEvent);
+        emitDebug({
+            type: "analytics",
+            message: `Analytics event: ${event.type}`,
+            data: analyticsEvent,
+        });
+    }, [emitDebug, onAnalyticsEvent]);
+    useEffect(() => {
+        if (typeof steps !== "function") {
+            return;
+        }
+        let isActive = true;
+        onStepsLoadStart?.();
+        emitAnalytics({ type: "steps_load_start" });
+        Promise.resolve()
+            .then(() => steps())
+            .then((loadedTours) => {
+            if (!isActive)
+                return;
+            if (!Array.isArray(loadedTours)) {
+                throw new Error("Onborda steps loader must resolve to an array of tours.");
+            }
+            setAsyncTours(loadedTours);
+            onStepsLoadSuccess?.(loadedTours);
+            emitAnalytics({ type: "steps_load_success" });
+            emitDebug({
+                type: "steps",
+                message: "Async steps loaded.",
+                data: loadedTours,
+            });
+        })
+            .catch((error) => {
+            if (!isActive)
+                return;
+            warnDev("steps-loader-error", "Async steps loader failed.", error);
+            onStepsLoadError?.(error);
+            emitAnalytics({ type: "steps_load_error", error });
+        });
+        return () => {
+            isActive = false;
+        };
+    }, [
+        emitAnalytics,
+        emitDebug,
+        onStepsLoadError,
+        onStepsLoadStart,
+        onStepsLoadSuccess,
+        steps,
+        warnDev,
+    ]);
     const updatePointerPosition = useCallback((element = currentElementRef.current) => {
         if (!element) {
             setPointerPosition(null);
@@ -152,7 +285,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             setTargetStatus("unknown");
             return;
         }
-        const element = document.querySelector(activeStep.selector);
+        const element = querySelector(activeStep.selector, "active step");
         if (!element) {
             clearActiveElement();
             setTargetStatus("missing");
@@ -172,6 +305,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         applyActiveElementStyle,
         clearActiveElement,
         isOnbordaVisible,
+        querySelector,
         refs,
         restoreActiveElementStyle,
         scrollElementIntoView,
@@ -180,14 +314,14 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     const scrollToElement = useCallback((stepIndex) => {
         if (!currentTourSteps)
             return;
-        const element = document.querySelector(currentTourSteps[stepIndex].selector);
+        const element = querySelector(currentTourSteps[stepIndex].selector, "step navigation");
         if (!element) {
             setPointerPosition(null);
             return;
         }
         scrollElementIntoView(element);
         updatePointerPosition(element);
-    }, [currentTourSteps, scrollElementIntoView, updatePointerPosition]);
+    }, [currentTourSteps, querySelector, scrollElementIntoView, updatePointerPosition]);
     const getRouteTransition = useCallback((toStepIndex, route, direction) => {
         if (!currentTour || !currentTourSteps)
             return null;
@@ -210,18 +344,35 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         if (currentTour) {
             if (onTourComplete)
                 onTourComplete(currentTour);
+            emitAnalytics({ type: "tour_complete", tour: currentTour });
         }
         cleanupMutationObserver();
         closeOnborda();
-    }, [cleanupMutationObserver, closeOnborda, currentTour, onTourComplete]);
+    }, [cleanupMutationObserver, closeOnborda, currentTour, emitAnalytics, onTourComplete]);
     const handleSkip = useCallback(() => {
         if (currentTour) {
             if (onTourSkip)
                 onTourSkip(currentTour, currentStep);
+            emitAnalytics({
+                type: "tour_skip",
+                tour: currentTour,
+                stepIndex: currentStep,
+                step: activeStep,
+                totalSteps: currentTourSteps?.length,
+            });
         }
         cleanupMutationObserver();
         closeOnborda();
-    }, [cleanupMutationObserver, closeOnborda, currentStep, currentTour, onTourSkip]);
+    }, [
+        activeStep,
+        cleanupMutationObserver,
+        closeOnborda,
+        currentStep,
+        currentTour,
+        currentTourSteps,
+        emitAnalytics,
+        onTourSkip,
+    ]);
     const handleClose = useCallback(() => {
         cleanupMutationObserver();
         closeOnborda();
@@ -234,12 +385,24 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 tourStartedRef.current = currentTour;
                 if (onTourStart)
                     onTourStart(currentTour);
+                emitAnalytics({ type: "tour_start", tour: currentTour });
             }
         }
         else {
             tourStartedRef.current = null;
         }
-    }, [currentTour, isOnbordaVisible, onTourStart]);
+    }, [currentTour, emitAnalytics, isOnbordaVisible, onTourStart]);
+    useEffect(() => {
+        if (!isOnbordaVisible || !currentTour)
+            return;
+        if (!currentTourSteps) {
+            warnDev(`missing-tour:${currentTour}`, `Tour "${currentTour}" is active but no matching tour is registered.`, { currentTour, availableTours });
+            return;
+        }
+        if (currentTourSteps.length === 0) {
+            warnDev(`empty-tour:${currentTour}`, `Tour "${currentTour}" has no renderable steps.`, { currentTour });
+        }
+    }, [availableTours, currentTour, currentTourSteps, isOnbordaVisible, warnDev]);
     // 2. Lifecycle Hook: onStepChange
     const lastFiredStepRef = useRef(null);
     useEffect(() => {
@@ -249,12 +412,26 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 lastFiredStepRef.current = currentStep;
                 if (onStepChange)
                     onStepChange(currentTour, currentStep, step);
+                emitAnalytics({
+                    type: "step_change",
+                    tour: currentTour,
+                    stepIndex: currentStep,
+                    step,
+                    totalSteps: currentTourSteps.length,
+                });
             }
         }
         else {
             lastFiredStepRef.current = null;
         }
-    }, [currentStep, currentTour, currentTourSteps, isOnbordaVisible, onStepChange]);
+    }, [
+        currentStep,
+        currentTour,
+        currentTourSteps,
+        emitAnalytics,
+        isOnbordaVisible,
+        onStepChange,
+    ]);
     // Target element tracking and initial scroll
     useEffect(() => {
         syncActiveElement();
@@ -327,13 +504,23 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 ...routeTransition,
                 targetFound,
             });
+            emitAnalytics({
+                type: "route_transition_complete",
+                tour: routeTransition.tour,
+                stepIndex: routeTransition.toStepIndex,
+                step: routeTransition.toStep,
+                routeTransition: {
+                    ...routeTransition,
+                    targetFound,
+                },
+            });
         };
-        if (document.querySelector(targetSelector)) {
+        if (querySelector(targetSelector, "route transition")) {
             showStep(true);
             return;
         }
         const observer = new MutationObserver((_, obs) => {
-            if (!document.querySelector(targetSelector))
+            if (!querySelector(targetSelector, "route transition observer"))
                 return;
             if (mutationTimeoutRef.current) {
                 clearTimeout(mutationTimeoutRef.current);
@@ -356,17 +543,36 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             mutationObserverRef.current = null;
             mutationTimeoutRef.current = null;
             onRouteTransitionTimeout?.(routeTransition);
+            emitAnalytics({
+                type: "route_transition_timeout",
+                tour: routeTransition.tour,
+                stepIndex: routeTransition.toStepIndex,
+                step: routeTransition.toStep,
+                routeTransition,
+            });
             setCurrentStep(stepIndex);
             onRouteTransitionComplete?.({
                 ...routeTransition,
                 targetFound: false,
             });
+            emitAnalytics({
+                type: "route_transition_complete",
+                tour: routeTransition.tour,
+                stepIndex: routeTransition.toStepIndex,
+                step: routeTransition.toStep,
+                routeTransition: {
+                    ...routeTransition,
+                    targetFound: false,
+                },
+            });
         }, 5000);
     }, [
         cleanupMutationObserver,
         currentTourSteps,
+        emitAnalytics,
         onRouteTransitionComplete,
         onRouteTransitionTimeout,
+        querySelector,
         scrollToElement,
         setCurrentStep,
     ]);
@@ -381,11 +587,25 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 const route = currentTourSteps[currentStep].nextRoute;
                 navigationDirectionRef.current = "forward";
                 cleanupMutationObserver();
+                emitAnalytics({
+                    type: "step_next",
+                    tour: currentTour,
+                    stepIndex: currentStep,
+                    step: currentTourSteps[currentStep],
+                    totalSteps: currentTourSteps.length,
+                });
                 if (route) {
                     routeTransition = getRouteTransition(nextStepIndex, route, "next");
                     if (!routeTransition)
                         return;
                     onRouteTransitionStart?.(routeTransition);
+                    emitAnalytics({
+                        type: "route_transition_start",
+                        tour: routeTransition.tour,
+                        stepIndex: routeTransition.fromStepIndex,
+                        step: routeTransition.fromStep,
+                        routeTransition,
+                    });
                     await router.push(route);
                     waitForRouteTarget(nextStepIndex, routeTransition);
                 }
@@ -397,6 +617,14 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             catch (error) {
                 if (routeTransition) {
                     onRouteTransitionError?.(routeTransition, error);
+                    emitAnalytics({
+                        type: "route_transition_error",
+                        tour: routeTransition.tour,
+                        stepIndex: routeTransition.fromStepIndex,
+                        step: routeTransition.fromStep,
+                        routeTransition,
+                        error,
+                    });
                 }
                 console.error("Error navigating to next route", error);
             }
@@ -407,7 +635,9 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     }, [
         cleanupMutationObserver,
         currentStep,
+        currentTour,
         currentTourSteps,
+        emitAnalytics,
         getRouteTransition,
         handleComplete,
         onRouteTransitionError,
@@ -426,11 +656,25 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             const route = currentTourSteps[currentStep].prevRoute;
             navigationDirectionRef.current = "backward";
             cleanupMutationObserver();
+            emitAnalytics({
+                type: "step_prev",
+                tour: currentTour,
+                stepIndex: currentStep,
+                step: currentTourSteps[currentStep],
+                totalSteps: currentTourSteps.length,
+            });
             if (route) {
                 routeTransition = getRouteTransition(prevStepIndex, route, "prev");
                 if (!routeTransition)
                     return;
                 onRouteTransitionStart?.(routeTransition);
+                emitAnalytics({
+                    type: "route_transition_start",
+                    tour: routeTransition.tour,
+                    stepIndex: routeTransition.fromStepIndex,
+                    step: routeTransition.fromStep,
+                    routeTransition,
+                });
                 await router.push(route);
                 waitForRouteTarget(prevStepIndex, routeTransition);
             }
@@ -442,13 +686,23 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         catch (error) {
             if (routeTransition) {
                 onRouteTransitionError?.(routeTransition, error);
+                emitAnalytics({
+                    type: "route_transition_error",
+                    tour: routeTransition.tour,
+                    stepIndex: routeTransition.fromStepIndex,
+                    step: routeTransition.fromStep,
+                    routeTransition,
+                    error,
+                });
             }
             console.error("Error navigating to previous route", error);
         }
     }, [
         cleanupMutationObserver,
         currentStep,
+        currentTour,
         currentTourSteps,
+        emitAnalytics,
         getRouteTransition,
         onRouteTransitionError,
         onRouteTransitionStart,
@@ -496,7 +750,15 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         if (lastMissingTargetRef.current === missingTargetKey)
             return;
         lastMissingTargetRef.current = missingTargetKey;
+        warnDev(`target-missing:${missingTargetKey}`, `Target selector "${activeStep.selector}" was not found for tour "${currentTour}".`, { tour: currentTour, stepIndex: currentStep, step: activeStep });
         onTargetMissing?.(currentTour, currentStep, activeStep);
+        emitAnalytics({
+            type: "target_missing",
+            tour: currentTour,
+            stepIndex: currentStep,
+            step: activeStep,
+            totalSteps: currentTourSteps?.length,
+        });
         if (targetMissingPolicy === "skip-step") {
             skipMissingStep();
             return;
@@ -508,12 +770,15 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         activeStep,
         currentStep,
         currentTour,
+        currentTourSteps,
+        emitAnalytics,
         handleSkip,
         isOnbordaVisible,
         onTargetMissing,
         skipMissingStep,
         targetMissingPolicy,
         targetStatus,
+        warnDev,
     ]);
     // Dynamic SVG arrow position based on final floating placement
     const getArrowStyle = (placement) => {
@@ -615,15 +880,49 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             id: descriptionId,
         },
     };
+    const headless = useMemo(() => ({
+        progressText,
+        canGoNext: totalSteps > 0,
+        canGoPrev: currentStep > 0,
+        canSkip: true,
+        canClose: true,
+        isFirstStep,
+        isLastStep,
+        targetFound,
+        getNextButtonProps: (props) => createHeadlessButtonProps(props, nextStep, {
+            "aria-label": isLastStep ? "Complete tour" : "Next step",
+        }),
+        getPrevButtonProps: (props) => createHeadlessButtonProps(props, prevStep, {
+            "aria-label": "Previous step",
+            disabled: currentStep <= 0,
+        }),
+        getSkipButtonProps: (props) => createHeadlessButtonProps(props, handleSkip, {
+            "aria-label": "Skip tour",
+        }),
+        getCloseButtonProps: (props) => createHeadlessButtonProps(props, handleClose, {
+            "aria-label": "Close tour",
+        }),
+    }), [
+        currentStep,
+        handleClose,
+        handleSkip,
+        isFirstStep,
+        isLastStep,
+        nextStep,
+        prevStep,
+        progressText,
+        targetFound,
+        totalSteps,
+    ]);
     const fallbackFloatingStyles = {
         position: "fixed",
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
     };
-    return (_jsxs("div", { "data-name": "onborda-wrapper", className: "relative w-full", "data-onborda": "dev", children: [_jsx("div", { "data-name": "onborda-site", className: "block w-full", children: children }), isOnbordaVisible && activeStep && CardComponent && (_jsxs(Portal, { children: [!interact && (_jsx("div", { className: "fixed inset-0 z-[890]", onClick: handleSkip })), _jsxs(motion.svg, { className: "fixed inset-0 w-full h-full z-[900] pointer-events-none", initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.3 }, "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("mask", { id: maskId, children: [_jsx("rect", { width: "100%", height: "100%", fill: "white" }), pointerPosition && (activeStep.spotlightShape === "circle" ? (_jsx(motion.circle, { cx: pointerPosition.x + pointerPosition.width / 2, cy: pointerPosition.y + pointerPosition.height / 2, r: Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset, fill: "black", transition: cardTransition })) : (_jsx(motion.rect, { x: pointerPosition.x - pointerPadOffset, y: pointerPosition.y - pointerPadOffset, width: pointerPosition.width + pointerPadding, height: pointerPosition.height + pointerPadding, rx: pointerRadius, ry: pointerRadius, fill: "black", transition: cardTransition })))] }) }), _jsx("rect", { width: "100%", height: "100%", fill: `rgba(${shadowRgb}, ${shadowOpacity})`, mask: `url(#${maskId})`, className: "pointer-events-auto" })] }), _jsx(FloatingFocusManager, { context: context, modal: !interact, initialFocus: 0, returnFocus: returnFocusRef, restoreFocus: true, closeOnFocusOut: false, children: _jsx("div", { ref: refs.setFloating, style: {
+    return (_jsxs("div", { "data-name": "onborda-wrapper", className: "relative w-full", "data-onborda-debug": debugEnabled ? "true" : undefined, children: [_jsx("div", { "data-name": "onborda-site", className: "block w-full", children: children }), isOnbordaVisible && activeStep && CardComponent && (_jsxs(Portal, { children: [!interact && (_jsx("div", { className: "fixed inset-0 z-[890]", onClick: handleSkip })), _jsxs(motion.svg, { className: "fixed inset-0 w-full h-full z-[900] pointer-events-none", initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.3 }, "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("mask", { id: maskId, children: [_jsx("rect", { width: "100%", height: "100%", fill: "white" }), pointerPosition && (activeStep.spotlightShape === "circle" ? (_jsx(motion.circle, { cx: pointerPosition.x + pointerPosition.width / 2, cy: pointerPosition.y + pointerPosition.height / 2, r: Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset, fill: "black", transition: cardTransition })) : (_jsx(motion.rect, { x: pointerPosition.x - pointerPadOffset, y: pointerPosition.y - pointerPadOffset, width: pointerPosition.width + pointerPadding, height: pointerPosition.height + pointerPadding, rx: pointerRadius, ry: pointerRadius, fill: "black", transition: cardTransition })))] }) }), _jsx("rect", { width: "100%", height: "100%", fill: `rgba(${shadowRgb}, ${shadowOpacity})`, mask: `url(#${maskId})`, className: "pointer-events-auto" })] }), _jsx(FloatingFocusManager, { context: context, modal: !interact, initialFocus: 0, returnFocus: returnFocusRef, restoreFocus: true, closeOnFocusOut: false, children: _jsx("div", { ref: refs.setFloating, style: {
                                 ...(targetFound ? floatingStyles : fallbackFloatingStyles),
                                 zIndex: 950,
-                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: targetFound ? _jsx(CardArrow, {}) : null, a11y: cardA11y })] }) }) })] }))] }));
+                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: targetFound ? _jsx(CardArrow, {}) : null, a11y: cardA11y, headless: headless })] }) }) })] }))] }));
 };
 export default Onborda;

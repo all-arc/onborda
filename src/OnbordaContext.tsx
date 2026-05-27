@@ -17,6 +17,7 @@ import {
   OnbordaProgressStorage,
   OnbordaProviderProps,
   OnbordaState,
+  Tour,
 } from "./types/index.js";
 
 const OnbordaContext = createContext<OnbordaContextType | undefined>(undefined);
@@ -31,6 +32,14 @@ const useOnborda = () => {
 
 const hasStateKey = (patch: Partial<OnbordaState>, key: keyof OnbordaState) =>
   Object.prototype.hasOwnProperty.call(patch, key);
+
+const upsertTours = (currentTours: Tour[], nextTours: Tour[]) => {
+  const tourMap = new Map(currentTours.map((tour) => [tour.tour, tour]));
+  nextTours.forEach((tour) => {
+    tourMap.set(tour.tour, tour);
+  });
+  return Array.from(tourMap.values());
+};
 
 const defaultProgressStorageKey = "onborda:progress";
 
@@ -136,6 +145,7 @@ const removePersistedProgress = (
 
 const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
   children,
+  initialTours = [],
   currentTour: controlledCurrentTour,
   currentStep: controlledCurrentStep,
   isOnbordaVisible: controlledIsOnbordaVisible,
@@ -154,6 +164,7 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     useState(defaultCurrentStep);
   const [uncontrolledIsOnbordaVisible, setUncontrolledIsOnbordaVisible] =
     useState(defaultIsOnbordaVisible);
+  const [registeredTours, setRegisteredTours] = useState<Tour[]>(initialTours);
   const progressConfig = useMemo(
     () => getProgressPersistenceConfig(progressPersistence),
     [progressPersistence]
@@ -264,6 +275,28 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     removePersistedProgress(storage, storageKey);
   }, []);
 
+  const unregisterTour = useCallback((tourName: string) => {
+    setRegisteredTours((currentTours) =>
+      currentTours.filter((tour) => tour.tour !== tourName)
+    );
+  }, []);
+
+  const registerTours = useCallback((tours: Tour[]) => {
+    setRegisteredTours((currentTours) => upsertTours(currentTours, tours));
+
+    return () => {
+      setRegisteredTours((currentTours) =>
+        currentTours.filter(
+          (tour) => !tours.some((registeredTour) => registeredTour.tour === tour.tour)
+        )
+      );
+    };
+  }, []);
+
+  const registerTour = useCallback((tour: Tour) => {
+    return registerTours([tour]);
+  }, [registerTours]);
+
   const setCurrentStep = useCallback((step: number, delay?: number) => {
     clearDelayedStep();
     if (delay) {
@@ -357,6 +390,10 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       closeOnborda,
       startOnborda,
       clearPersistedProgress,
+      registeredTours,
+      registerTour,
+      registerTours,
+      unregisterTour,
       isOnbordaVisible,
     }),
     [
@@ -365,8 +402,12 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       currentStep,
       currentTour,
       isOnbordaVisible,
+      registeredTours,
+      registerTour,
+      registerTours,
       setCurrentStep,
       startOnborda,
+      unregisterTour,
     ]
   );
 

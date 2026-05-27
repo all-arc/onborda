@@ -131,15 +131,15 @@ const routeMissingTargetTours: Tour[] = [
   },
 ];
 
-function Starter({ step = 0 }: { step?: number }) {
+function Starter({ step = 0, tour = "main" }: { step?: number; tour?: string }) {
   const { startOnborda, setCurrentStep } = useOnborda();
 
   useEffect(() => {
-    startOnborda("main");
+    startOnborda(tour);
     if (step > 0) {
       setCurrentStep(step);
     }
-  }, [setCurrentStep, startOnborda, step]);
+  }, [setCurrentStep, startOnborda, step, tour]);
 
   return null;
 }
@@ -164,6 +164,61 @@ function ProgressControls() {
       </button>
       <button type="button" onClick={clearPersistedProgress}>
         Clear progress
+      </button>
+    </>
+  );
+}
+
+function RegistryStarter({ tour = "registered" }: { tour?: string }) {
+  const { registerTour, startOnborda } = useOnborda();
+
+  useEffect(() => {
+    const unregister = registerTour({
+      tour,
+      steps: [
+        {
+          title: "Registered step",
+          content: "Registered content",
+          selector: "#registered-target",
+        },
+      ],
+    });
+
+    startOnborda(tour);
+
+    return unregister;
+  }, [registerTour, startOnborda, tour]);
+
+  return null;
+}
+
+function RegistryControls() {
+  const { registerTour, unregisterTour, startOnborda } = useOnborda();
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          registerTour({
+            tour: "manual-registry",
+            steps: [
+              {
+                title: "Manual registered step",
+                content: "Manual registered content",
+                selector: "#registered-target",
+              },
+            ],
+          });
+        }}
+      >
+        Register tour
+      </button>
+      <button type="button" onClick={() => startOnborda("manual-registry")}>
+        Start registered
+      </button>
+      <button type="button" onClick={() => unregisterTour("manual-registry")}>
+        Unregister tour
       </button>
     </>
   );
@@ -214,6 +269,20 @@ function A11yCard({ step, a11y }: CardComponentProps) {
     <section>
       <h2 {...a11y.titleProps}>{step.title}</h2>
       <p {...a11y.descriptionProps}>Custom accessible description</p>
+    </section>
+  );
+}
+
+function HeadlessCard({ step, headless }: CardComponentProps) {
+  return (
+    <section>
+      <h2>{step.title}</h2>
+      <p>{headless.progressText}</p>
+      <p>{headless.targetFound ? "headless-target-found" : "headless-target-missing"}</p>
+      <button {...headless.getPrevButtonProps()}>Headless previous</button>
+      <button {...headless.getNextButtonProps()}>Headless next</button>
+      <button {...headless.getSkipButtonProps()}>Headless skip</button>
+      <button {...headless.getCloseButtonProps()}>Headless close</button>
     </section>
   );
 }
@@ -834,5 +903,310 @@ describe("Onborda", () => {
     await userEvent.click(screen.getByRole("button", { name: "Clear progress" }));
 
     expect(storage.getItem(storageKey)).toBeNull();
+  });
+
+  it("supports tours registered through context", async () => {
+    render(
+      <OnbordaProvider>
+        <div id="registered-target" style={{ position: "absolute", zIndex: "5" }}>
+          Registered target
+        </div>
+        <Onborda interact cardComponent={TestCard}>
+          <RegistryStarter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Registered step" })).toBeInTheDocument();
+  });
+
+  it("supports manual tour registry updates", async () => {
+    render(
+      <OnbordaProvider>
+        <div id="registered-target" style={{ position: "absolute", zIndex: "5" }}>
+          Registered target
+        </div>
+        <Onborda interact cardComponent={TestCard}>
+          <RegistryControls />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Register tour" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start registered" }));
+
+    expect(await screen.findByRole("dialog", { name: "Manual registered step" })).toBeInTheDocument();
+  });
+
+  it("filters conditional steps before rendering and navigation", async () => {
+    const conditionalTours: Tour[] = [
+      {
+        tour: "main",
+        steps: [
+          {
+            title: "Visible conditional step",
+            content: "Visible content",
+            selector: "#first-target",
+            when: () => true,
+          },
+          {
+            title: "Hidden conditional step",
+            content: "Hidden content",
+            selector: "#hidden-target",
+            when: false,
+          },
+          {
+            title: "Final conditional step",
+            content: "Final content",
+            selector: "#third-target",
+          },
+        ],
+      },
+    ];
+
+    render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <div id="third-target" style={{ position: "absolute", zIndex: "5" }}>
+          Third target
+        </div>
+        <Onborda steps={conditionalTours} interact cardComponent={TestCard}>
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Visible conditional step" })).toBeInTheDocument();
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByRole("dialog", { name: "Final conditional step" })).toBeInTheDocument();
+    expect(screen.queryByText("Hidden conditional step")).not.toBeInTheDocument();
+  });
+
+  it("loads async steps before rendering a started tour", async () => {
+    const onStepsLoadStart = vi.fn();
+    const onStepsLoadSuccess = vi.fn();
+
+    render(
+      <OnbordaProvider>
+        <div id="async-target" style={{ position: "absolute", zIndex: "5" }}>
+          Async target
+        </div>
+        <Onborda
+          steps={async () => [
+            {
+              tour: "main",
+              steps: [
+                {
+                  title: "Async step",
+                  content: "Async content",
+                  selector: "#async-target",
+                },
+              ],
+            },
+          ]}
+          interact
+          cardComponent={TestCard}
+          onStepsLoadStart={onStepsLoadStart}
+          onStepsLoadSuccess={onStepsLoadSuccess}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Async step" })).toBeInTheDocument();
+    expect(onStepsLoadStart).toHaveBeenCalledTimes(1);
+    expect(onStepsLoadSuccess).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tour: "main",
+        }),
+      ])
+    );
+  });
+
+  it("reports async step loader errors", async () => {
+    const error = new Error("load failed");
+    const onStepsLoadError = vi.fn();
+
+    render(
+      <OnbordaProvider>
+        <Onborda
+          steps={async () => {
+            throw error;
+          }}
+          interact
+          cardComponent={TestCard}
+          onStepsLoadError={onStepsLoadError}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    await waitFor(() => {
+      expect(onStepsLoadError).toHaveBeenCalledWith(error);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("fires analytics events for tour start, step changes, and completion", async () => {
+    const onAnalyticsEvent = vi.fn();
+
+    render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda
+          steps={tours}
+          interact
+          cardComponent={TestCard}
+          onAnalyticsEvent={onAnalyticsEvent}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(onAnalyticsEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "tour_start",
+        tour: "main",
+      })
+    );
+    expect(onAnalyticsEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "step_next",
+        tour: "main",
+        stepIndex: 0,
+      })
+    );
+    expect(onAnalyticsEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "step_change",
+        tour: "main",
+        stepIndex: 1,
+      })
+    );
+    expect(onAnalyticsEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "tour_complete",
+        tour: "main",
+      })
+    );
+  });
+
+  it("passes headless helpers that wire card controls", async () => {
+    render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda steps={tours} interact cardComponent={HeadlessCard}>
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous step" })).toBeDisabled();
+    expect(screen.getByText("Step 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText("headless-target-found")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next step" }));
+
+    expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous step" })).not.toBeDisabled();
+    expect(screen.getByText("Step 2 of 2")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close tour" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("warns in dev mode for invalid selectors without throwing", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const invalidTours: Tour[] = [
+      {
+        tour: "invalid",
+        steps: [
+          {
+            title: "Invalid selector",
+            content: "Invalid content",
+            selector: "[",
+          },
+        ],
+      },
+    ];
+
+    render(
+      <OnbordaProvider>
+        <Onborda steps={invalidTours} interact cardComponent={TestCard} devWarnings>
+          <Starter tour="invalid" />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "Invalid selector" })).toBeInTheDocument();
+    expect(screen.getByText("target-missing")).toBeInTheDocument();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Onborda: Invalid selector"),
+      expect.objectContaining({
+        selector: "[",
+      })
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("emits debug events and marks the wrapper when debug mode is enabled", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const onDebug = vi.fn();
+
+    const { container } = render(
+      <OnbordaProvider>
+        <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
+          Target
+        </div>
+        <Onborda
+          steps={tours}
+          interact
+          cardComponent={TestCard}
+          debug={{ onEvent: onDebug }}
+        >
+          <Starter />
+        </Onborda>
+      </OnbordaProvider>
+    );
+
+    expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
+    expect(container.querySelector("[data-onborda-debug='true']")).toBeInTheDocument();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "analytics",
+        message: "Analytics event: tour_start",
+      })
+    );
+    expect(debugSpy).toHaveBeenCalledWith(
+      "[Onborda] Analytics event: tour_start",
+      expect.objectContaining({
+        type: "tour_start",
+      })
+    );
+
+    debugSpy.mockRestore();
   });
 });

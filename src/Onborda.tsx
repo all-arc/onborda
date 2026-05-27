@@ -26,9 +26,15 @@ import {
 import {
   OnbordaA11yText,
   OnbordaAccessibilityContext,
+  OnbordaAnalyticsEvent,
+  OnbordaDebugEvent,
+  OnbordaHeadlessButtonProps,
+  OnbordaHeadlessHelpers,
   OnbordaProps,
   RouteTransition,
   RouteTransitionDirection,
+  Step,
+  Tour,
 } from "./types/index.js";
 
 type TargetRect = {
@@ -45,6 +51,12 @@ type SavedElementStyle = {
 };
 
 type TargetStatus = "unknown" | "found" | "missing";
+
+type RuntimeProcess = {
+  env?: {
+    NODE_ENV?: string;
+  };
+};
 
 const offset = 20;
 
@@ -93,6 +105,59 @@ const resolveA11yText = (
   return value;
 };
 
+const mergeTours = (tourGroups: Tour[][]) => {
+  const tourMap = new Map<string, Tour>();
+  tourGroups.flat().forEach((tour) => {
+    tourMap.set(tour.tour, tour);
+  });
+  return Array.from(tourMap.values());
+};
+
+const shouldIncludeStep = (tourName: string, step: Step, stepIndex: number) => {
+  if (step.when === undefined) return true;
+  if (typeof step.when === "boolean") return step.when;
+  return step.when({ tour: tourName, step, stepIndex });
+};
+
+const filterConditionalSteps = (tours: Tour[]) =>
+  tours.map((tour) => ({
+    ...tour,
+    steps: tour.steps.filter((step, stepIndex) =>
+      shouldIncludeStep(tour.tour, step, stepIndex)
+    ),
+  }));
+
+const getNow = () => Date.now();
+
+const getNodeEnv = () =>
+  (globalThis as typeof globalThis & { process?: RuntimeProcess }).process?.env
+    ?.NODE_ENV;
+
+const callButtonAction = (
+  event: React.MouseEvent<HTMLButtonElement>,
+  props: OnbordaHeadlessButtonProps | undefined,
+  action: () => void
+) => {
+  props?.onClick?.(event);
+  if (!event.defaultPrevented) {
+    action();
+  }
+};
+
+const createHeadlessButtonProps = (
+  props: OnbordaHeadlessButtonProps | undefined,
+  action: () => void,
+  defaults: OnbordaHeadlessButtonProps
+): OnbordaHeadlessButtonProps => ({
+  ...props,
+  type: props?.type ?? defaults.type ?? "button",
+  disabled: props?.disabled ?? defaults.disabled,
+  "aria-label": props?.["aria-label"] ?? defaults["aria-label"],
+  onClick: (event) => {
+    callButtonAction(event, props, action);
+  },
+});
+
 const Onborda: React.FC<OnbordaProps> = ({
   children,
   interact = false,
@@ -103,6 +168,8 @@ const Onborda: React.FC<OnbordaProps> = ({
   cardComponent: CardComponent,
   targetMissingPolicy = "fallback",
   accessibility,
+  devWarnings,
+  debug,
   onTourStart,
   onStepChange,
   onTargetMissing,
@@ -110,14 +177,31 @@ const Onborda: React.FC<OnbordaProps> = ({
   onRouteTransitionComplete,
   onRouteTransitionTimeout,
   onRouteTransitionError,
+  onStepsLoadStart,
+  onStepsLoadSuccess,
+  onStepsLoadError,
+  onAnalyticsEvent,
   onTourComplete,
   onTourSkip,
 }) => {
-  const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda } =
+  const {
+    currentTour,
+    currentStep,
+    setCurrentStep,
+    isOnbordaVisible,
+    closeOnborda,
+    registeredTours,
+  } =
     useOnborda();
+  const [asyncTours, setAsyncTours] = useState<Tour[]>([]);
+  const propTours = Array.isArray(steps) ? steps : asyncTours;
+  const availableTours = useMemo(
+    () => filterConditionalSteps(mergeTours([registeredTours, propTours])),
+    [propTours, registeredTours]
+  );
   const currentTourSteps = useMemo(
-    () => steps.find((tour) => tour.tour === currentTour)?.steps,
-    [currentTour, steps]
+    () => availableTours.find((tour) => tour.tour === currentTour)?.steps,
+    [availableTours, currentTour]
   );
   const activeStep = currentTourSteps?.[currentStep];
 
@@ -134,6 +218,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   const wasVisibleRef = useRef(false);
   const navigationDirectionRef = useRef<"forward" | "backward">("forward");
   const lastMissingTargetRef = useRef<string | null>(null);
+  const devWarningKeysRef = useRef<Set<string>>(new Set());
   const maskId = useId();
   const dialogId = useId();
   const titleId = useId();
@@ -141,6 +226,122 @@ const Onborda: React.FC<OnbordaProps> = ({
 
   // Route Changes
   const router = useRouter();
+
+  const debugOptions = typeof debug === "object" ? debug : undefined;
+  const debugEnabled = typeof debug === "boolean"
+    ? debug
+    : debugOptions?.enabled ?? !!debugOptions;
+  const debugShouldLog = debugOptions?.log ?? debugEnabled;
+  const shouldShowDevWarnings =
+    devWarnings ?? (debugEnabled || getNodeEnv() === "development");
+
+  const emitDebug = useCallback(
+    (event: Omit<OnbordaDebugEvent, "timestamp">) => {
+      if (!debugEnabled) return;
+
+      const debugEvent = {
+        ...event,
+        timestamp: getNow(),
+      };
+      debugOptions?.onEvent?.(debugEvent);
+      if (debugShouldLog) {
+        console.debug(`[Onborda] ${event.message}`, event.data ?? "");
+      }
+    },
+    [debugEnabled, debugOptions, debugShouldLog]
+  );
+
+  const warnDev = useCallback(
+    (key: string, message: string, data?: unknown) => {
+      if (!shouldShowDevWarnings || devWarningKeysRef.current.has(key)) return;
+
+      devWarningKeysRef.current.add(key);
+      console.warn(`Onborda: ${message}`, data ?? "");
+      emitDebug({
+        type: "dev_warning",
+        message,
+        data,
+      });
+    },
+    [emitDebug, shouldShowDevWarnings]
+  );
+
+  const querySelector = useCallback(
+    (selector: string, context: string) => {
+      try {
+        return document.querySelector(selector);
+      } catch (error) {
+        warnDev(
+          `invalid-selector:${selector}:${context}`,
+          `Invalid selector "${selector}" in ${context}.`,
+          { selector, context, error }
+        );
+        return null;
+      }
+    },
+    [warnDev]
+  );
+
+  const emitAnalytics = useCallback(
+    (event: Omit<OnbordaAnalyticsEvent, "timestamp">) => {
+      const analyticsEvent = {
+        ...event,
+        timestamp: getNow(),
+      };
+      onAnalyticsEvent?.(analyticsEvent);
+      emitDebug({
+        type: "analytics",
+        message: `Analytics event: ${event.type}`,
+        data: analyticsEvent,
+      });
+    },
+    [emitDebug, onAnalyticsEvent]
+  );
+
+  useEffect(() => {
+    if (typeof steps !== "function") {
+      return;
+    }
+
+    let isActive = true;
+    onStepsLoadStart?.();
+    emitAnalytics({ type: "steps_load_start" });
+
+    Promise.resolve()
+      .then(() => steps())
+      .then((loadedTours) => {
+        if (!isActive) return;
+        if (!Array.isArray(loadedTours)) {
+          throw new Error("Onborda steps loader must resolve to an array of tours.");
+        }
+        setAsyncTours(loadedTours);
+        onStepsLoadSuccess?.(loadedTours);
+        emitAnalytics({ type: "steps_load_success" });
+        emitDebug({
+          type: "steps",
+          message: "Async steps loaded.",
+          data: loadedTours,
+        });
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        warnDev("steps-loader-error", "Async steps loader failed.", error);
+        onStepsLoadError?.(error);
+        emitAnalytics({ type: "steps_load_error", error });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    emitAnalytics,
+    emitDebug,
+    onStepsLoadError,
+    onStepsLoadStart,
+    onStepsLoadSuccess,
+    steps,
+    warnDev,
+  ]);
 
   const updatePointerPosition = useCallback((element: Element | null = currentElementRef.current) => {
     if (!element) {
@@ -249,7 +450,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       return;
     }
 
-    const element = document.querySelector(activeStep.selector) as HTMLElement | null;
+    const element = querySelector(activeStep.selector, "active step") as HTMLElement | null;
     if (!element) {
       clearActiveElement();
       setTargetStatus("missing");
@@ -271,6 +472,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     applyActiveElementStyle,
     clearActiveElement,
     isOnbordaVisible,
+    querySelector,
     refs,
     restoreActiveElementStyle,
     scrollElementIntoView,
@@ -281,7 +483,10 @@ const Onborda: React.FC<OnbordaProps> = ({
     (stepIndex: number) => {
       if (!currentTourSteps) return;
 
-      const element = document.querySelector(currentTourSteps[stepIndex].selector);
+      const element = querySelector(
+        currentTourSteps[stepIndex].selector,
+        "step navigation"
+      );
       if (!element) {
         setPointerPosition(null);
         return;
@@ -290,7 +495,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       scrollElementIntoView(element);
       updatePointerPosition(element);
     },
-    [currentTourSteps, scrollElementIntoView, updatePointerPosition]
+    [currentTourSteps, querySelector, scrollElementIntoView, updatePointerPosition]
   );
 
   const getRouteTransition = useCallback(
@@ -322,18 +527,35 @@ const Onborda: React.FC<OnbordaProps> = ({
   const handleComplete = useCallback(() => {
     if (currentTour) {
       if (onTourComplete) onTourComplete(currentTour);
+      emitAnalytics({ type: "tour_complete", tour: currentTour });
     }
     cleanupMutationObserver();
     closeOnborda();
-  }, [cleanupMutationObserver, closeOnborda, currentTour, onTourComplete]);
+  }, [cleanupMutationObserver, closeOnborda, currentTour, emitAnalytics, onTourComplete]);
 
   const handleSkip = useCallback(() => {
     if (currentTour) {
       if (onTourSkip) onTourSkip(currentTour, currentStep);
+      emitAnalytics({
+        type: "tour_skip",
+        tour: currentTour,
+        stepIndex: currentStep,
+        step: activeStep,
+        totalSteps: currentTourSteps?.length,
+      });
     }
     cleanupMutationObserver();
     closeOnborda();
-  }, [cleanupMutationObserver, closeOnborda, currentStep, currentTour, onTourSkip]);
+  }, [
+    activeStep,
+    cleanupMutationObserver,
+    closeOnborda,
+    currentStep,
+    currentTour,
+    currentTourSteps,
+    emitAnalytics,
+    onTourSkip,
+  ]);
 
   const handleClose = useCallback(() => {
     cleanupMutationObserver();
@@ -347,11 +569,33 @@ const Onborda: React.FC<OnbordaProps> = ({
       if (tourStartedRef.current !== currentTour) {
         tourStartedRef.current = currentTour;
         if (onTourStart) onTourStart(currentTour);
+        emitAnalytics({ type: "tour_start", tour: currentTour });
       }
     } else {
       tourStartedRef.current = null;
     }
-  }, [currentTour, isOnbordaVisible, onTourStart]);
+  }, [currentTour, emitAnalytics, isOnbordaVisible, onTourStart]);
+
+  useEffect(() => {
+    if (!isOnbordaVisible || !currentTour) return;
+
+    if (!currentTourSteps) {
+      warnDev(
+        `missing-tour:${currentTour}`,
+        `Tour "${currentTour}" is active but no matching tour is registered.`,
+        { currentTour, availableTours }
+      );
+      return;
+    }
+
+    if (currentTourSteps.length === 0) {
+      warnDev(
+        `empty-tour:${currentTour}`,
+        `Tour "${currentTour}" has no renderable steps.`,
+        { currentTour }
+      );
+    }
+  }, [availableTours, currentTour, currentTourSteps, isOnbordaVisible, warnDev]);
 
   // 2. Lifecycle Hook: onStepChange
   const lastFiredStepRef = useRef<number | null>(null);
@@ -361,11 +605,25 @@ const Onborda: React.FC<OnbordaProps> = ({
       if (step && lastFiredStepRef.current !== currentStep) {
         lastFiredStepRef.current = currentStep;
         if (onStepChange) onStepChange(currentTour, currentStep, step);
+        emitAnalytics({
+          type: "step_change",
+          tour: currentTour,
+          stepIndex: currentStep,
+          step,
+          totalSteps: currentTourSteps.length,
+        });
       }
     } else {
       lastFiredStepRef.current = null;
     }
-  }, [currentStep, currentTour, currentTourSteps, isOnbordaVisible, onStepChange]);
+  }, [
+    currentStep,
+    currentTour,
+    currentTourSteps,
+    emitAnalytics,
+    isOnbordaVisible,
+    onStepChange,
+  ]);
 
   // Target element tracking and initial scroll
   useEffect(() => {
@@ -447,15 +705,25 @@ const Onborda: React.FC<OnbordaProps> = ({
           ...routeTransition,
           targetFound,
         });
+        emitAnalytics({
+          type: "route_transition_complete",
+          tour: routeTransition.tour,
+          stepIndex: routeTransition.toStepIndex,
+          step: routeTransition.toStep,
+          routeTransition: {
+            ...routeTransition,
+            targetFound,
+          },
+        });
       };
 
-      if (document.querySelector(targetSelector)) {
+      if (querySelector(targetSelector, "route transition")) {
         showStep(true);
         return;
       }
 
       const observer = new MutationObserver((_, obs) => {
-        if (!document.querySelector(targetSelector)) return;
+        if (!querySelector(targetSelector, "route transition observer")) return;
 
         if (mutationTimeoutRef.current) {
           clearTimeout(mutationTimeoutRef.current);
@@ -480,18 +748,37 @@ const Onborda: React.FC<OnbordaProps> = ({
         mutationObserverRef.current = null;
         mutationTimeoutRef.current = null;
         onRouteTransitionTimeout?.(routeTransition);
+        emitAnalytics({
+          type: "route_transition_timeout",
+          tour: routeTransition.tour,
+          stepIndex: routeTransition.toStepIndex,
+          step: routeTransition.toStep,
+          routeTransition,
+        });
         setCurrentStep(stepIndex);
         onRouteTransitionComplete?.({
           ...routeTransition,
           targetFound: false,
+        });
+        emitAnalytics({
+          type: "route_transition_complete",
+          tour: routeTransition.tour,
+          stepIndex: routeTransition.toStepIndex,
+          step: routeTransition.toStep,
+          routeTransition: {
+            ...routeTransition,
+            targetFound: false,
+          },
         });
       }, 5000);
     },
     [
       cleanupMutationObserver,
       currentTourSteps,
+      emitAnalytics,
       onRouteTransitionComplete,
       onRouteTransitionTimeout,
+      querySelector,
       scrollToElement,
       setCurrentStep,
     ]
@@ -509,12 +796,26 @@ const Onborda: React.FC<OnbordaProps> = ({
 
         navigationDirectionRef.current = "forward";
         cleanupMutationObserver();
+        emitAnalytics({
+          type: "step_next",
+          tour: currentTour,
+          stepIndex: currentStep,
+          step: currentTourSteps[currentStep],
+          totalSteps: currentTourSteps.length,
+        });
 
         if (route) {
           routeTransition = getRouteTransition(nextStepIndex, route, "next");
           if (!routeTransition) return;
 
           onRouteTransitionStart?.(routeTransition);
+          emitAnalytics({
+            type: "route_transition_start",
+            tour: routeTransition.tour,
+            stepIndex: routeTransition.fromStepIndex,
+            step: routeTransition.fromStep,
+            routeTransition,
+          });
           await router.push(route);
           waitForRouteTarget(nextStepIndex, routeTransition);
         } else {
@@ -524,6 +825,14 @@ const Onborda: React.FC<OnbordaProps> = ({
       } catch (error) {
         if (routeTransition) {
           onRouteTransitionError?.(routeTransition, error);
+          emitAnalytics({
+            type: "route_transition_error",
+            tour: routeTransition.tour,
+            stepIndex: routeTransition.fromStepIndex,
+            step: routeTransition.fromStep,
+            routeTransition,
+            error,
+          });
         }
         console.error("Error navigating to next route", error);
       }
@@ -533,7 +842,9 @@ const Onborda: React.FC<OnbordaProps> = ({
   }, [
     cleanupMutationObserver,
     currentStep,
+    currentTour,
     currentTourSteps,
+    emitAnalytics,
     getRouteTransition,
     handleComplete,
     onRouteTransitionError,
@@ -554,12 +865,26 @@ const Onborda: React.FC<OnbordaProps> = ({
 
       navigationDirectionRef.current = "backward";
       cleanupMutationObserver();
+      emitAnalytics({
+        type: "step_prev",
+        tour: currentTour,
+        stepIndex: currentStep,
+        step: currentTourSteps[currentStep],
+        totalSteps: currentTourSteps.length,
+      });
 
       if (route) {
         routeTransition = getRouteTransition(prevStepIndex, route, "prev");
         if (!routeTransition) return;
 
         onRouteTransitionStart?.(routeTransition);
+        emitAnalytics({
+          type: "route_transition_start",
+          tour: routeTransition.tour,
+          stepIndex: routeTransition.fromStepIndex,
+          step: routeTransition.fromStep,
+          routeTransition,
+        });
         await router.push(route);
         waitForRouteTarget(prevStepIndex, routeTransition);
       } else {
@@ -569,13 +894,23 @@ const Onborda: React.FC<OnbordaProps> = ({
     } catch (error) {
       if (routeTransition) {
         onRouteTransitionError?.(routeTransition, error);
+        emitAnalytics({
+          type: "route_transition_error",
+          tour: routeTransition.tour,
+          stepIndex: routeTransition.fromStepIndex,
+          step: routeTransition.fromStep,
+          routeTransition,
+          error,
+        });
       }
       console.error("Error navigating to previous route", error);
     }
   }, [
     cleanupMutationObserver,
     currentStep,
+    currentTour,
     currentTourSteps,
+    emitAnalytics,
     getRouteTransition,
     onRouteTransitionError,
     onRouteTransitionStart,
@@ -630,7 +965,19 @@ const Onborda: React.FC<OnbordaProps> = ({
     if (lastMissingTargetRef.current === missingTargetKey) return;
 
     lastMissingTargetRef.current = missingTargetKey;
+    warnDev(
+      `target-missing:${missingTargetKey}`,
+      `Target selector "${activeStep.selector}" was not found for tour "${currentTour}".`,
+      { tour: currentTour, stepIndex: currentStep, step: activeStep }
+    );
     onTargetMissing?.(currentTour, currentStep, activeStep);
+    emitAnalytics({
+      type: "target_missing",
+      tour: currentTour,
+      stepIndex: currentStep,
+      step: activeStep,
+      totalSteps: currentTourSteps?.length,
+    });
 
     if (targetMissingPolicy === "skip-step") {
       skipMissingStep();
@@ -644,12 +991,15 @@ const Onborda: React.FC<OnbordaProps> = ({
     activeStep,
     currentStep,
     currentTour,
+    currentTourSteps,
+    emitAnalytics,
     handleSkip,
     isOnbordaVisible,
     onTargetMissing,
     skipMissingStep,
     targetMissingPolicy,
     targetStatus,
+    warnDev,
   ]);
 
   // Dynamic SVG arrow position based on final floating placement
@@ -767,6 +1117,47 @@ const Onborda: React.FC<OnbordaProps> = ({
       id: descriptionId,
     },
   };
+  const headless = useMemo<OnbordaHeadlessHelpers>(
+    () => ({
+      progressText,
+      canGoNext: totalSteps > 0,
+      canGoPrev: currentStep > 0,
+      canSkip: true,
+      canClose: true,
+      isFirstStep,
+      isLastStep,
+      targetFound,
+      getNextButtonProps: (props) =>
+        createHeadlessButtonProps(props, nextStep, {
+          "aria-label": isLastStep ? "Complete tour" : "Next step",
+        }),
+      getPrevButtonProps: (props) =>
+        createHeadlessButtonProps(props, prevStep, {
+          "aria-label": "Previous step",
+          disabled: currentStep <= 0,
+        }),
+      getSkipButtonProps: (props) =>
+        createHeadlessButtonProps(props, handleSkip, {
+          "aria-label": "Skip tour",
+        }),
+      getCloseButtonProps: (props) =>
+        createHeadlessButtonProps(props, handleClose, {
+          "aria-label": "Close tour",
+        }),
+    }),
+    [
+      currentStep,
+      handleClose,
+      handleSkip,
+      isFirstStep,
+      isLastStep,
+      nextStep,
+      prevStep,
+      progressText,
+      targetFound,
+      totalSteps,
+    ]
+  );
   const fallbackFloatingStyles = {
     position: "fixed" as const,
     top: "50%",
@@ -778,7 +1169,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     <div
       data-name="onborda-wrapper"
       className="relative w-full"
-      data-onborda="dev"
+      data-onborda-debug={debugEnabled ? "true" : undefined}
     >
       <div data-name="onborda-site" className="block w-full">
         {children}
@@ -883,6 +1274,7 @@ const Onborda: React.FC<OnbordaProps> = ({
                   targetFound={targetFound}
                   arrow={targetFound ? <CardArrow /> : null}
                   a11y={cardA11y}
+                  headless={headless}
                 />
               </div>
             </div>

@@ -122,6 +122,7 @@ export function ControlledTour({ children }: { children: React.ReactNode }) {
 | `defaultCurrentTour`       | `string \| null`                  | Initial tour name for uncontrolled usage. Defaults to `null`. |
 | `defaultCurrentStep`       | `number`                          | Initial step index for uncontrolled usage. Defaults to `0`. |
 | `defaultIsOnbordaVisible`  | `boolean`                         | Initial open state for uncontrolled usage. Defaults to `false`. |
+| `initialTours`             | `Tour[]`                          | Optional. Tours initially available from the provider registry. |
 | `progressPersistence`      | `boolean \| OnbordaProgressPersistenceOptions` | Optional. Persists provider progress to storage and restores it on mount. Defaults to `false`. |
 | `onCurrentTourChange`      | `(tour: string \| null) => void`  | Called when Onborda requests a tour change. |
 | `onCurrentStepChange`      | `(step: number) => void`          | Called when Onborda requests a step change. |
@@ -161,6 +162,131 @@ const { clearPersistedProgress } = useOnborda();
 
 <button onClick={clearPersistedProgress}>Reset onboarding progress</button>
 ```
+
+### Tour registry
+Use the provider registry when feature modules should own their own tours instead of passing every tour through one `steps` array. Registered tours are merged with the `steps` prop by tour name.
+
+```tsx
+import { useEffect } from "react";
+import { useOnborda } from "onborda";
+
+export function BillingTourRegistration() {
+  const { registerTour } = useOnborda();
+
+  useEffect(() => {
+    return registerTour({
+      tour: "billing",
+      steps: [
+        {
+          title: "Billing overview",
+          content: "Review invoices and payment methods here.",
+          selector: "#billing-overview",
+        },
+      ],
+    });
+  }, [registerTour]);
+
+  return null;
+}
+```
+
+Registry APIs are available from `useOnborda()`:
+
+```tsx
+const {
+  registeredTours,
+  registerTour,
+  registerTours,
+  unregisterTour,
+  startOnborda,
+} = useOnborda();
+```
+
+You can render `Onborda` without a `steps` prop when all tours come from the registry:
+
+```tsx
+<Onborda cardComponent={CustomCard}>
+  {children}
+</Onborda>
+```
+
+### Conditional and async steps
+Add `when` to a step to include it conditionally. Conditions are evaluated before step counts, navigation, and callbacks.
+
+```tsx
+const steps: Tour[] = [
+  {
+    tour: "workspace",
+    steps: [
+      {
+        title: "Invite teammates",
+        content: "Add people to your workspace.",
+        selector: "#invite",
+        when: ({ tour }) => tour === "workspace",
+      },
+      {
+        title: "Admin settings",
+        content: "Only admins see this step.",
+        selector: "#admin-settings",
+        when: currentUser.role === "admin",
+      },
+    ],
+  },
+];
+```
+
+`steps` can also be an async loader:
+
+```tsx
+<Onborda
+  steps={async () => {
+    const response = await fetch("/api/onboarding");
+    return response.json();
+  }}
+  cardComponent={CustomCard}
+  onStepsLoadStart={() => console.log("loading tours")}
+  onStepsLoadSuccess={(tours) => console.log("loaded", tours.length)}
+  onStepsLoadError={(error) => console.error(error)}
+>
+  {children}
+</Onborda>
+```
+
+### Analytics hooks
+Use `onAnalyticsEvent` for one consolidated stream across tour lifecycle, step navigation, route transitions, missing targets, and async step loading.
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  onAnalyticsEvent={(event) => {
+    analytics.track(event.type, event);
+  }}
+>
+  {children}
+</Onborda>
+```
+
+### Dev warnings and debug mode
+Set `devWarnings` when you want runtime warnings for configuration issues while building tours. Debug mode also enables these warnings and emits namespaced debug events.
+
+```tsx
+<Onborda
+  steps={steps}
+  cardComponent={CustomCard}
+  devWarnings
+  debug={{
+    log: false,
+    onEvent: (event) => {
+      console.debug(event.type, event.message, event.data);
+    },
+  }}
+>
+  {children}
+</Onborda>
+```
+
+Warnings are deduped by issue and cover invalid selectors, missing active tours, empty tours, async loader failures, and missing targets. Route target timeouts still use `console.warn` even without `devWarnings`.
 
 ### Target missing policy
 By default, if a step selector does not match an element, Onborda keeps the tour open and renders the same custom card in the center of the viewport with `targetFound: false` and `arrow: null`.
@@ -296,6 +422,7 @@ Onborda requires a custom card component. This keeps the library focused on posi
 | `targetFound`   | `boolean`        | Indicates whether the current selector matched an element. |
 | `arrow`         | `ReactElement \| null` | Returns an SVG arrow element when a target is found. It is `null` when the card is rendered in fallback mode. |
 | `a11y`          | `OnbordaCardAccessibilityProps` | Generated IDs and helper props for connecting your card title/description to the dialog wrapper. |
+| `headless`      | `OnbordaHeadlessHelpers` | Generated button prop getters and state flags for wiring card controls without manually binding Onborda actions. |
 
 ```tsx
 "use client"
@@ -305,29 +432,30 @@ export const CustomCard = ({
   step,
   currentStep,
   totalSteps,
-  nextStep,
-  prevStep,
-  skipTour,
-  isFirstStep,
   isLastStep,
   targetFound,
   arrow,
   a11y,
+  headless,
 }: CardComponentProps) => {
   return (
     <div aria-live="polite">
       <h1 {...a11y.titleProps}>{step.icon} {step.title}</h1>
-      <h2>{currentStep + 1} of {totalSteps}</h2>
+      <h2>{headless.progressText || `${currentStep + 1} of ${totalSteps}`}</h2>
       <p {...a11y.descriptionProps}>{step.content}</p>
       {!targetFound && <p>The highlighted element is not currently available.</p>}
-      <button onClick={prevStep} disabled={isFirstStep}>Previous</button>
-      <button onClick={nextStep}>{isLastStep ? "Finish" : "Next"}</button>
-      <button onClick={skipTour}>Skip</button>
+      <button {...headless.getPrevButtonProps()}>Previous</button>
+      <button {...headless.getNextButtonProps()}>
+        {isLastStep ? "Finish" : "Next"}
+      </button>
+      <button {...headless.getSkipButtonProps()}>Skip</button>
       {arrow ?? null}
     </div>
   )
 }
 ```
+
+`headless` keeps the UI fully custom while supplying stable control wiring. The button prop getters merge your props, set `type="button"`, provide default aria labels, and call the matching Onborda action after your `onClick` unless the event is prevented.
 
 ### Steps object
 Onborda supports multiple "tours", allowing you to define distinct walkthroughs for different parts of your application. The `steps` prop expects an array of `Tour` objects as shown below:
@@ -364,6 +492,7 @@ const steps: Tour[] = [
 | `pointerPadding` | `number`                        | Optional. The padding around the spotlight (keyhole) highlighting the target element. Defaults to `30`. |
 | `pointerRadius`  | `number`                        | Optional. The border-radius of the spotlight highlighting the target element. Defaults to `28`. |
 | `spotlightShape` | `"rect"` \| `"circle"`          | Optional. Controls whether the spotlight cutout shape is a rectangle or circle. Defaults to `"rect"`. |
+| `when`           | `boolean \| (context: StepConditionContext) => boolean` | Optional. Includes or excludes this step before rendering and navigation. |
 | `nextRoute`      | `string`                        | Optional. The route to navigate to using `next/navigation` when moving to the next step.                      |
 | `prevRoute`      | `string`                        | Optional. The route to navigate to using `next/navigation` when moving to the previous step.                  |
 
@@ -418,13 +547,19 @@ export const steps: Tour[] = [
 |-----------------|-----------------------|---------------------------------------------------------------------------------------|
 | `children`      | `React.ReactNode`     | Your website or application content.                                                  |
 | `interact`      | `boolean`             | Optional. Controls whether the onboarding overlay should be interactive. Defaults to `false`. |
-| `steps`         | `Tour[]`              | An array of `Tour` objects defining each tour in your onboarding process.              |
+| `steps`         | `Tour[] \| TourResolver` | Optional. Tours or an async tour loader. You may omit this when using only the provider registry. |
 | `shadowRgb`     | `string`              | Optional. The RGB values for the shadow color surrounding the target area. Defaults to black `"0,0,0"`.      |
 | `shadowOpacity` | `string`              | Optional. The opacity value for the shadow surrounding the target area. Defaults to `"0.2"`          |
 | `cardComponent` | `ComponentType<CardComponentProps>` | Required. A custom React component used to render the card/tooltip. |
 | `cardTransition`| `Transition`          | Transitions between steps. Accepts framer-motion `Transition` configurations. Example: `{{ type: "spring" }}`. |
 | `targetMissingPolicy` | `"fallback"` \| `"skip-step"` \| `"skip-tour"` | Optional. Controls what happens when the current step selector does not match an element. Defaults to `"fallback"`. |
 | `accessibility` | `OnbordaAccessibilityOptions` | Optional. Controls dialog role, aria labels, aria descriptions, modal semantics, progress text, and live region announcements. |
+| `devWarnings` | `boolean` | Optional. Enables one-time development warnings for invalid selectors, missing tours, empty tours, async loader errors, and missing targets. Enabled automatically in React/Next development mode. |
+| `debug` | `boolean \| OnbordaDebugOptions` | Optional. Enables debug events and namespaced `console.debug` output. Passing `debug={{ log: false, onEvent }}` captures events without console output. |
+| `onStepsLoadStart` | `() => void` | Optional. Callback function triggered before an async `steps` loader runs. |
+| `onStepsLoadSuccess` | `(tours: Tour[]) => void` | Optional. Callback function triggered after an async `steps` loader resolves. |
+| `onStepsLoadError` | `(error: unknown) => void` | Optional. Callback function triggered when an async `steps` loader rejects. |
+| `onAnalyticsEvent` | `(event: OnbordaAnalyticsEvent) => void` | Optional. Consolidated analytics callback for lifecycle, navigation, route, target, and async loader events. |
 | `onTourStart`   | `(tour: string) => void` | Optional. Callback function triggered when a tour begins. |
 | `onStepChange`  | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered whenever the active step changes. |
 | `onTargetMissing` | `(tour: string, stepIndex: number, step: Step) => void` | Optional. Callback function triggered once when the current selector cannot be found. |

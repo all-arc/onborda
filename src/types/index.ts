@@ -8,6 +8,10 @@ export interface OnbordaContextType {
   closeOnborda: () => void;
   startOnborda: (tourName: string) => void;
   clearPersistedProgress: () => void;
+  registeredTours: Tour[];
+  registerTour: (tour: Tour) => () => void;
+  registerTours: (tours: Tour[]) => () => void;
+  unregisterTour: (tourName: string) => void;
   isOnbordaVisible: boolean;
 }
 
@@ -40,6 +44,7 @@ export type OnbordaProgressPersistence =
 
 export interface OnbordaProviderProps {
   children: React.ReactNode;
+  initialTours?: Tour[];
   currentTour?: string | null;
   currentStep?: number;
   isOnbordaVisible?: boolean;
@@ -52,6 +57,16 @@ export interface OnbordaProviderProps {
   onOpenChange?: (open: boolean) => void;
   onStateChange?: (state: OnbordaState) => void;
 }
+
+export interface StepConditionContext {
+  tour: string;
+  step: Step;
+  stepIndex: number;
+}
+
+export type StepCondition =
+  | boolean
+  | ((context: StepConditionContext) => boolean);
 
 // Step
 export interface Step {
@@ -66,6 +81,7 @@ export interface Step {
   pointerPadding?: number;
   pointerRadius?: number;
   spotlightShape?: "rect" | "circle";
+  when?: StepCondition;
   // Routing
   nextRoute?: string;
   prevRoute?: string;
@@ -77,6 +93,8 @@ export interface Tour {
   tour: string;
   steps: Step[];
 }
+
+export type TourResolver = () => Tour[] | Promise<Tour[]>;
 
 export type TargetMissingPolicy = "fallback" | "skip-step" | "skip-tour";
 
@@ -135,11 +153,83 @@ export interface OnbordaCardAccessibilityProps {
   };
 }
 
+export type OnbordaHeadlessButtonProps =
+  React.ButtonHTMLAttributes<HTMLButtonElement>;
+
+export interface OnbordaHeadlessHelpers {
+  progressText: string;
+  canGoNext: boolean;
+  canGoPrev: boolean;
+  canSkip: boolean;
+  canClose: boolean;
+  isFirstStep: boolean;
+  isLastStep: boolean;
+  targetFound: boolean;
+  getNextButtonProps: (
+    props?: OnbordaHeadlessButtonProps
+  ) => OnbordaHeadlessButtonProps;
+  getPrevButtonProps: (
+    props?: OnbordaHeadlessButtonProps
+  ) => OnbordaHeadlessButtonProps;
+  getSkipButtonProps: (
+    props?: OnbordaHeadlessButtonProps
+  ) => OnbordaHeadlessButtonProps;
+  getCloseButtonProps: (
+    props?: OnbordaHeadlessButtonProps
+  ) => OnbordaHeadlessButtonProps;
+}
+
+export type OnbordaAnalyticsEventType =
+  | "tour_start"
+  | "tour_complete"
+  | "tour_skip"
+  | "step_change"
+  | "step_next"
+  | "step_prev"
+  | "target_missing"
+  | "route_transition_start"
+  | "route_transition_complete"
+  | "route_transition_timeout"
+  | "route_transition_error"
+  | "steps_load_start"
+  | "steps_load_success"
+  | "steps_load_error";
+
+export interface OnbordaAnalyticsEvent {
+  type: OnbordaAnalyticsEventType;
+  tour?: string | null;
+  stepIndex?: number;
+  step?: Step;
+  totalSteps?: number;
+  routeTransition?: RouteTransition | RouteTransitionComplete;
+  error?: unknown;
+  timestamp: number;
+}
+
+export type OnbordaDebugEventType =
+  | "analytics"
+  | "dev_warning"
+  | "target"
+  | "steps";
+
+export interface OnbordaDebugEvent {
+  type: OnbordaDebugEventType;
+  message: string;
+  data?: unknown;
+  timestamp: number;
+}
+
+export interface OnbordaDebugOptions {
+  enabled?: boolean;
+  log?: boolean;
+  onEvent?: (event: OnbordaDebugEvent) => void;
+}
+
 // Onborda
 export interface OnbordaProps {
   children: React.ReactNode;
   interact?: boolean;
-  steps: Tour[];
+  steps?: Tour[] | TourResolver;
   showOnborda?: boolean;
   shadowRgb?: string;
   shadowOpacity?: string;
@@ -147,6 +237,8 @@ export interface OnbordaProps {
   cardComponent: React.ComponentType<CardComponentProps>;
   targetMissingPolicy?: TargetMissingPolicy;
   accessibility?: OnbordaAccessibilityOptions;
+  devWarnings?: boolean;
+  debug?: boolean | OnbordaDebugOptions;
   // Callbacks
   onTourStart?: (tour: string) => void;
   onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
@@ -155,6 +247,10 @@ export interface OnbordaProps {
   onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
   onRouteTransitionTimeout?: (transition: RouteTransition) => void;
   onRouteTransitionError?: (transition: RouteTransition, error: unknown) => void;
+  onStepsLoadStart?: () => void;
+  onStepsLoadSuccess?: (tours: Tour[]) => void;
+  onStepsLoadError?: (error: unknown) => void;
+  onAnalyticsEvent?: (event: OnbordaAnalyticsEvent) => void;
   onTourComplete?: (tour: string) => void;
   onTourSkip?: (tour: string, currentStep: number) => void;
 }
@@ -173,4 +269,5 @@ export interface CardComponentProps {
   targetFound: boolean;
   arrow?: React.ReactElement | null;
   a11y: OnbordaCardAccessibilityProps;
+  headless: OnbordaHeadlessHelpers;
 }

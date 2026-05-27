@@ -10,6 +10,13 @@ const useOnborda = () => {
     return context;
 };
 const hasStateKey = (patch, key) => Object.prototype.hasOwnProperty.call(patch, key);
+const upsertTours = (currentTours, nextTours) => {
+    const tourMap = new Map(currentTours.map((tour) => [tour.tour, tour]));
+    nextTours.forEach((tour) => {
+        tourMap.set(tour.tour, tour);
+    });
+    return Array.from(tourMap.values());
+};
 const defaultProgressStorageKey = "onborda:progress";
 const getBrowserStorage = () => {
     if (typeof window === "undefined" || !window.localStorage)
@@ -97,10 +104,11 @@ const removePersistedProgress = (storage, storageKey) => {
         // Storage can fail in private browsing or when quota is exceeded.
     }
 };
-const OnbordaProvider = ({ children, currentTour: controlledCurrentTour, currentStep: controlledCurrentStep, isOnbordaVisible: controlledIsOnbordaVisible, defaultCurrentTour = null, defaultCurrentStep = 0, defaultIsOnbordaVisible = false, progressPersistence = false, onCurrentTourChange, onCurrentStepChange, onOpenChange, onStateChange, }) => {
+const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledCurrentTour, currentStep: controlledCurrentStep, isOnbordaVisible: controlledIsOnbordaVisible, defaultCurrentTour = null, defaultCurrentStep = 0, defaultIsOnbordaVisible = false, progressPersistence = false, onCurrentTourChange, onCurrentStepChange, onOpenChange, onStateChange, }) => {
     const [uncontrolledCurrentTour, setUncontrolledCurrentTour] = useState(defaultCurrentTour);
     const [uncontrolledCurrentStep, setUncontrolledCurrentStep] = useState(defaultCurrentStep);
     const [uncontrolledIsOnbordaVisible, setUncontrolledIsOnbordaVisible] = useState(defaultIsOnbordaVisible);
+    const [registeredTours, setRegisteredTours] = useState(initialTours);
     const progressConfig = useMemo(() => getProgressPersistenceConfig(progressPersistence), [progressPersistence]);
     const [hasRestoredProgress, setHasRestoredProgress] = useState(!progressConfig.enabled || !progressConfig.restore);
     const currentTour = controlledCurrentTour !== undefined
@@ -185,6 +193,18 @@ const OnbordaProvider = ({ children, currentTour: controlledCurrentTour, current
             return;
         removePersistedProgress(storage, storageKey);
     }, []);
+    const unregisterTour = useCallback((tourName) => {
+        setRegisteredTours((currentTours) => currentTours.filter((tour) => tour.tour !== tourName));
+    }, []);
+    const registerTours = useCallback((tours) => {
+        setRegisteredTours((currentTours) => upsertTours(currentTours, tours));
+        return () => {
+            setRegisteredTours((currentTours) => currentTours.filter((tour) => !tours.some((registeredTour) => registeredTour.tour === tour.tour)));
+        };
+    }, []);
+    const registerTour = useCallback((tour) => {
+        return registerTours([tour]);
+    }, [registerTours]);
     const setCurrentStep = useCallback((step, delay) => {
         clearDelayedStep();
         if (delay) {
@@ -258,6 +278,10 @@ const OnbordaProvider = ({ children, currentTour: controlledCurrentTour, current
         closeOnborda,
         startOnborda,
         clearPersistedProgress,
+        registeredTours,
+        registerTour,
+        registerTours,
+        unregisterTour,
         isOnbordaVisible,
     }), [
         clearPersistedProgress,
@@ -265,8 +289,12 @@ const OnbordaProvider = ({ children, currentTour: controlledCurrentTour, current
         currentStep,
         currentTour,
         isOnbordaVisible,
+        registeredTours,
+        registerTour,
+        registerTours,
         setCurrentStep,
         startOnborda,
+        unregisterTour,
     ]);
     return (_jsx(OnbordaContext.Provider, { value: contextValue, children: children }));
 };
