@@ -6,6 +6,10 @@ const root = process.cwd();
 const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
 describe("package export metadata", () => {
+  it("publishes under the okido package name", () => {
+    expect(packageJson.name).toBe("okido");
+  });
+
   it("declares ESM package metadata for tree shaking", () => {
     expect(packageJson.type).toBe("module");
     expect(packageJson.sideEffects).toBe(false);

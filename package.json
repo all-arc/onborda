@@ -1,20 +1,20 @@
 {
-  "name": "onborda",
+  "name": "okido",
   "version": "1.2.5",
-  "description": "The ultimate product tour library for Next.js",
+  "description": "Product tour library for Next.js",
   "type": "module",
   "license": "MIT",
   "author": "Matt Litherland",
-  "homepage": "https://github.com/uixmat/onborda#readme",
+  "homepage": "https://github.com/all-arc/okido#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/uixmat/onborda.git"
+    "url": "git+https://github.com/all-arc/okido.git"
   },
   "keywords": [
     "react-onboarding",
-    "react-onborda",
+    "react-okido",
     "onboarding",
-    "onborda",
+    "okido",
     "wizard",
     "react",
     "product-tour",

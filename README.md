@@ -1,19 +1,16 @@
-# Onborda - Next.js onboarding flow
-Onborda is a lightweight onboarding flow that utilises [framer-motion](https://www.framer.com/motion/) for animations and [tailwindcss](https://tailwindcss.com/) for styling. Fully customisable pointers (tooltips) that can easily be used with [shadcn/ui](https://ui.shadcn.com/) for modern web applications.
-
-- **Demo - [onborda.vercel.app](https://onborda.vercel.app)**
-- **[Demo repository](https://github.com/uixmat/onborda-demo)**
+# Okido - Next.js onboarding flow
+Okido is a lightweight onboarding flow that utilises [framer-motion](https://www.framer.com/motion/) for animations and [tailwindcss](https://tailwindcss.com/) for styling. Fully customisable pointers (tooltips) that can easily be used with [shadcn/ui](https://ui.shadcn.com/) for modern web applications.
 
 
 ## Getting started
 ```bash
 # pnpm
-pnpm add onborda
+pnpm add okido
 ```
 
 ### Global `layout.tsx`
 ```tsx
-import { OnbordaProvider, Onborda } from "onborda";
+import { OnbordaProvider, Onborda } from "okido";
 import { CustomCard } from "@/components/CustomCard";
 
 // In your root layout component:
@@ -34,15 +31,15 @@ Target anything in your app using the elements `id` attribute.
 The root import is convenient when you need both the overlay and the hook:
 
 ```tsx
-import { Onborda, OnbordaProvider, useOnborda } from "onborda";
+import { Onborda, OnbordaProvider, useOnborda } from "okido";
 ```
 
 For smaller bundles, import only the part you need from a subpath:
 
 ```tsx
-import { Onborda } from "onborda/onborda";
-import { OnbordaProvider, useOnborda } from "onborda/context";
-import type { CardComponentProps, Tour } from "onborda/types";
+import { Onborda } from "okido/onborda";
+import { OnbordaProvider, useOnborda } from "okido/context";
+import type { CardComponentProps, Tour } from "okido/types";
 ```
 
 The package publishes ESM, explicit `exports`, and `sideEffects: false` so Next.js and other modern bundlers can remove unused exports.
@@ -78,8 +75,8 @@ For URL-driven tours, product analytics flows, or app-owned persistence, control
 "use client";
 
 import { useState } from "react";
-import { OnbordaProvider, Onborda } from "onborda";
-import type { OnbordaState } from "onborda";
+import { OnbordaProvider, Onborda } from "okido";
+import type { OnbordaState } from "okido";
 
 export function ControlledTour({ children }: { children: React.ReactNode }) {
   const [onborda, setOnborda] = useState<OnbordaState>({
@@ -168,7 +165,7 @@ Use the provider registry when feature modules should own their own tours instea
 
 ```tsx
 import { useEffect } from "react";
-import { useOnborda } from "onborda";
+import { useOnborda } from "okido";
 
 export function BillingTourRegistration() {
   const { registerTour } = useOnborda();
@@ -387,7 +384,7 @@ Onborda labels the card wrapper as a `dialog` by default using the current step 
 When `useCardLabelIds` is enabled, wire the generated IDs into your custom card:
 
 ```tsx
-import type { CardComponentProps } from "onborda";
+import type { CardComponentProps } from "okido";
 
 export function CustomCard({ step, a11y }: CardComponentProps) {
   return (
@@ -421,7 +418,7 @@ Tailwind CSS will need to scan the node module in order to include the classes u
 ```ts
 const config: Config = {
   content: [
-    './node_modules/onborda/dist/**/*.{js,ts,jsx,tsx}' // Add this
+    './node_modules/okido/dist/**/*.{js,ts,jsx,tsx}' // Add this
   ]
 }
 ```
@@ -447,7 +444,7 @@ Onborda requires a custom card component. This keeps the library focused on posi
 
 ```tsx
 "use client"
-import type { CardComponentProps } from "onborda";
+import type { CardComponentProps } from "okido";
 
 export const CustomCard = ({
   step,
@@ -482,7 +479,7 @@ export const CustomCard = ({
 Onborda supports multiple "tours", allowing you to define distinct walkthroughs for different parts of your application. The `steps` prop expects an array of `Tour` objects as shown below:
 
 ```tsx
-import { Tour } from "onborda";
+import { Tour } from "okido";
 
 const steps: Tour[] = [
   {
@@ -523,7 +520,7 @@ const steps: Tour[] = [
 ### Example `steps`
 
 ```tsx
-import { Tour } from "onborda";
+import { Tour } from "okido";
 
 export const steps: Tour[] = [
   {
@@ -615,7 +612,7 @@ Since `OnbordaProvider` and `Onborda` are Client Components under the hood (mark
 
 ```tsx
 // app/layout.tsx
-import { OnbordaProvider, Onborda } from "onborda";
+import { OnbordaProvider, Onborda } from "okido";
 import { steps } from "@/config/steps";
 import CustomCard from "@/components/CustomCard";
 
@@ -651,7 +648,7 @@ To launch or exit a tour programmatically (for example, when a user clicks a "He
 // components/TourControls.tsx
 "use client";
 
-import { useOnborda } from "onborda";
+import { useOnborda } from "okido";
 
 export default function TourControls() {
   const { startOnborda, closeOnborda } = useOnborda();
@@ -723,7 +720,7 @@ To prevent users from seeing the tour every time they visit, you can use the Onb
 // app/layout.tsx
 "use client";
 
-import { OnbordaProvider, Onborda } from "onborda";
+import { OnbordaProvider, Onborda } from "okido";
 import CustomCard from "@/components/CustomCard";
 import { steps } from "@/config/steps";
 import { updateUserTourCompletion } from "@/app/actions"; // Your Server Action
