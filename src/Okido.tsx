@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useOnborda } from "./OnbordaContext.js";
+import { useOkido } from "./OkidoContext.js";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";
@@ -24,15 +24,15 @@ import {
 
 // Types
 import {
-  OnbordaA11yText,
-  OnbordaAccessibilityContext,
-  OnbordaAnalyticsEvent,
-  OnbordaDebugEvent,
-  OnbordaHeadlessButtonProps,
-  OnbordaHeadlessHelpers,
-  OnbordaMobilePlacement,
-  OnbordaPlacementSide,
-  OnbordaProps,
+  OkidoA11yText,
+  OkidoAccessibilityContext,
+  OkidoAnalyticsEvent,
+  OkidoDebugEvent,
+  OkidoHeadlessButtonProps,
+  OkidoHeadlessHelpers,
+  OkidoMobilePlacement,
+  OkidoPlacementSide,
+  OkidoProps,
   RouteTransition,
   RouteTransitionDirection,
   Step,
@@ -63,7 +63,7 @@ type RuntimeProcess = {
 const offset = 20;
 const defaultMobileBreakpoint = 768;
 
-const placementMap: Record<OnbordaPlacementSide, Placement> = {
+const placementMap: Record<OkidoPlacementSide, Placement> = {
   "top": "top",
   "bottom": "bottom",
   "left": "left",
@@ -101,8 +101,8 @@ const getElementRect = (element: Element): TargetRect => {
 };
 
 const resolveA11yText = (
-  value: OnbordaA11yText | undefined,
-  context: OnbordaAccessibilityContext
+  value: OkidoA11yText | undefined,
+  context: OkidoAccessibilityContext
 ) => {
   if (typeof value === "function") return value(context);
   return value;
@@ -136,7 +136,7 @@ const getViewportWidth = () =>
   typeof window === "undefined" ? null : window.innerWidth;
 
 const normalizeMobilePlacement = (
-  mobilePlacement: OnbordaMobilePlacement | undefined
+  mobilePlacement: OkidoMobilePlacement | undefined
 ) => {
   if (!mobilePlacement) return {};
   if (typeof mobilePlacement === "string") {
@@ -153,7 +153,7 @@ const getNodeEnv = () =>
 
 const callButtonAction = (
   event: React.MouseEvent<HTMLButtonElement>,
-  props: OnbordaHeadlessButtonProps | undefined,
+  props: OkidoHeadlessButtonProps | undefined,
   action: () => void
 ) => {
   props?.onClick?.(event);
@@ -163,10 +163,10 @@ const callButtonAction = (
 };
 
 const createHeadlessButtonProps = (
-  props: OnbordaHeadlessButtonProps | undefined,
+  props: OkidoHeadlessButtonProps | undefined,
   action: () => void,
-  defaults: OnbordaHeadlessButtonProps
-): OnbordaHeadlessButtonProps => ({
+  defaults: OkidoHeadlessButtonProps
+): OkidoHeadlessButtonProps => ({
   ...props,
   type: props?.type ?? defaults.type ?? "button",
   disabled: props?.disabled ?? defaults.disabled,
@@ -176,7 +176,7 @@ const createHeadlessButtonProps = (
   },
 });
 
-const Onborda: React.FC<OnbordaProps> = ({
+const Okido: React.FC<OkidoProps> = ({
   children,
   interact = false,
   steps,
@@ -207,11 +207,11 @@ const Onborda: React.FC<OnbordaProps> = ({
     currentTour,
     currentStep,
     setCurrentStep,
-    isOnbordaVisible,
-    closeOnborda,
+    isOkidoVisible,
+    closeOkido,
     registeredTours,
   } =
-    useOnborda();
+    useOkido();
   const [asyncTours, setAsyncTours] = useState<Tour[]>([]);
   const [viewportWidth, setViewportWidth] = useState<number | null>(() =>
     getViewportWidth()
@@ -258,7 +258,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     devWarnings ?? (debugEnabled || getNodeEnv() === "development");
 
   const emitDebug = useCallback(
-    (event: Omit<OnbordaDebugEvent, "timestamp">) => {
+    (event: Omit<OkidoDebugEvent, "timestamp">) => {
       if (!debugEnabled) return;
 
       const debugEvent = {
@@ -267,7 +267,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       };
       debugOptions?.onEvent?.(debugEvent);
       if (debugShouldLog) {
-        console.debug(`[Onborda] ${event.message}`, event.data ?? "");
+        console.debug(`[Okido] ${event.message}`, event.data ?? "");
       }
     },
     [debugEnabled, debugOptions, debugShouldLog]
@@ -278,7 +278,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       if (!shouldShowDevWarnings || devWarningKeysRef.current.has(key)) return;
 
       devWarningKeysRef.current.add(key);
-      console.warn(`Onborda: ${message}`, data ?? "");
+      console.warn(`Okido: ${message}`, data ?? "");
       emitDebug({
         type: "dev_warning",
         message,
@@ -305,7 +305,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   );
 
   const emitAnalytics = useCallback(
-    (event: Omit<OnbordaAnalyticsEvent, "timestamp">) => {
+    (event: Omit<OkidoAnalyticsEvent, "timestamp">) => {
       const analyticsEvent = {
         ...event,
         timestamp: getNow(),
@@ -334,7 +334,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       .then((loadedTours) => {
         if (!isActive) return;
         if (!Array.isArray(loadedTours)) {
-          throw new Error("Onborda steps loader must resolve to an array of tours.");
+          throw new Error("Okido steps loader must resolve to an array of tours.");
         }
         setAsyncTours(loadedTours);
         onStepsLoadSuccess?.(loadedTours);
@@ -408,7 +408,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     : desktopPlacementSide;
   const isMobileCenterPlacement =
     isMobileViewport && effectivePlacementValue === "center";
-  const effectivePlacementSide: OnbordaPlacementSide =
+  const effectivePlacementSide: OkidoPlacementSide =
     effectivePlacementValue === "auto" || effectivePlacementValue === "center"
       ? desktopPlacementSide
       : effectivePlacementValue;
@@ -417,8 +417,8 @@ const Onborda: React.FC<OnbordaProps> = ({
     isMobileViewport && mobilePlacementOptions.fallbackPlacements
       ? mobilePlacementOptions.fallbackPlacements
       : isMobileViewport
-        ? (["bottom", "top"] as OnbordaPlacementSide[])
-        : (["bottom", "top", "right", "left"] as OnbordaPlacementSide[]);
+        ? (["bottom", "top"] as OkidoPlacementSide[])
+        : (["bottom", "top", "right", "left"] as OkidoPlacementSide[]);
   const floatingOffsetValue =
     isMobileViewport ? mobilePlacementOptions.offset ?? 16 : 25;
   const shiftPadding =
@@ -445,7 +445,7 @@ const Onborda: React.FC<OnbordaProps> = ({
           updatePointerPosition(reference);
         }
       }),
-    open: isOnbordaVisible && !!activeStep,
+    open: isOkidoVisible && !!activeStep,
     middleware: floatingMiddleware,
   });
 
@@ -513,7 +513,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   }, []);
 
   const syncActiveElement = useCallback(() => {
-    if (!isOnbordaVisible || !activeStep) {
+    if (!isOkidoVisible || !activeStep) {
       clearActiveElement();
       setTargetStatus("unknown");
       return;
@@ -540,7 +540,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     activeStep,
     applyActiveElementStyle,
     clearActiveElement,
-    isOnbordaVisible,
+    isOkidoVisible,
     querySelector,
     refs,
     restoreActiveElementStyle,
@@ -599,8 +599,8 @@ const Onborda: React.FC<OnbordaProps> = ({
       emitAnalytics({ type: "tour_complete", tour: currentTour });
     }
     cleanupMutationObserver();
-    closeOnborda();
-  }, [cleanupMutationObserver, closeOnborda, currentTour, emitAnalytics, onTourComplete]);
+    closeOkido();
+  }, [cleanupMutationObserver, closeOkido, currentTour, emitAnalytics, onTourComplete]);
 
   const handleSkip = useCallback(() => {
     if (currentTour) {
@@ -614,11 +614,11 @@ const Onborda: React.FC<OnbordaProps> = ({
       });
     }
     cleanupMutationObserver();
-    closeOnborda();
+    closeOkido();
   }, [
     activeStep,
     cleanupMutationObserver,
-    closeOnborda,
+    closeOkido,
     currentStep,
     currentTour,
     currentTourSteps,
@@ -628,13 +628,13 @@ const Onborda: React.FC<OnbordaProps> = ({
 
   const handleClose = useCallback(() => {
     cleanupMutationObserver();
-    closeOnborda();
-  }, [cleanupMutationObserver, closeOnborda]);
+    closeOkido();
+  }, [cleanupMutationObserver, closeOkido]);
 
   // 1. Lifecycle Hook: onTourStart
   const tourStartedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isOnbordaVisible && currentTour) {
+    if (isOkidoVisible && currentTour) {
       if (tourStartedRef.current !== currentTour) {
         tourStartedRef.current = currentTour;
         if (onTourStart) onTourStart(currentTour);
@@ -643,10 +643,10 @@ const Onborda: React.FC<OnbordaProps> = ({
     } else {
       tourStartedRef.current = null;
     }
-  }, [currentTour, emitAnalytics, isOnbordaVisible, onTourStart]);
+  }, [currentTour, emitAnalytics, isOkidoVisible, onTourStart]);
 
   useEffect(() => {
-    if (!isOnbordaVisible || !currentTour) return;
+    if (!isOkidoVisible || !currentTour) return;
 
     if (!currentTourSteps) {
       warnDev(
@@ -664,12 +664,12 @@ const Onborda: React.FC<OnbordaProps> = ({
         { currentTour }
       );
     }
-  }, [availableTours, currentTour, currentTourSteps, isOnbordaVisible, warnDev]);
+  }, [availableTours, currentTour, currentTourSteps, isOkidoVisible, warnDev]);
 
   // 2. Lifecycle Hook: onStepChange
   const lastFiredStepRef = useRef<number | null>(null);
   useEffect(() => {
-    if (isOnbordaVisible && currentTour && currentTourSteps) {
+    if (isOkidoVisible && currentTour && currentTourSteps) {
       const step = currentTourSteps[currentStep];
       if (step && lastFiredStepRef.current !== currentStep) {
         lastFiredStepRef.current = currentStep;
@@ -690,7 +690,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     currentTour,
     currentTourSteps,
     emitAnalytics,
-    isOnbordaVisible,
+    isOkidoVisible,
     onStepChange,
   ]);
 
@@ -705,7 +705,7 @@ const Onborda: React.FC<OnbordaProps> = ({
 
   // keydown navigation hook
   useEffect(() => {
-    if (!isOnbordaVisible) return;
+    if (!isOkidoVisible) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
@@ -734,7 +734,7 @@ const Onborda: React.FC<OnbordaProps> = ({
 
   // Track the element that had focus before the tour opened and restore it on close.
   useEffect(() => {
-    if (!isOnbordaVisible) {
+    if (!isOkidoVisible) {
       const handleFocusIn = (event: FocusEvent) => {
         if (event.target instanceof HTMLElement) {
           returnFocusRef.current = event.target;
@@ -744,14 +744,14 @@ const Onborda: React.FC<OnbordaProps> = ({
       document.addEventListener("focusin", handleFocusIn);
       return () => document.removeEventListener("focusin", handleFocusIn);
     }
-  }, [isOnbordaVisible]);
+  }, [isOkidoVisible]);
 
   useEffect(() => {
-    if (wasVisibleRef.current && !isOnbordaVisible) {
+    if (wasVisibleRef.current && !isOkidoVisible) {
       returnFocusRef.current?.focus();
     }
-    wasVisibleRef.current = isOnbordaVisible;
-  }, [isOnbordaVisible]);
+    wasVisibleRef.current = isOkidoVisible;
+  }, [isOkidoVisible]);
 
   // Clean up mutation observers, timers, and target styles on unmount
   useEffect(() => {
@@ -812,7 +812,7 @@ const Onborda: React.FC<OnbordaProps> = ({
 
       // 5-second safeguard timeout
       mutationTimeoutRef.current = setTimeout(() => {
-        console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
+        console.warn(`Okido: Element with selector "${targetSelector}" was not found within 5 seconds.`);
         observer.disconnect();
         mutationObserverRef.current = null;
         mutationTimeoutRef.current = null;
@@ -1018,7 +1018,7 @@ const Onborda: React.FC<OnbordaProps> = ({
   ]);
 
   useEffect(() => {
-    if (!isOnbordaVisible || !currentTour || !activeStep) {
+    if (!isOkidoVisible || !currentTour || !activeStep) {
       lastMissingTargetRef.current = null;
       return;
     }
@@ -1063,7 +1063,7 @@ const Onborda: React.FC<OnbordaProps> = ({
     currentTourSteps,
     emitAnalytics,
     handleSkip,
-    isOnbordaVisible,
+    isOkidoVisible,
     onTargetMissing,
     skipMissingStep,
     targetMissingPolicy,
@@ -1124,7 +1124,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       <svg
         ref={arrowRef}
         viewBox="0 0 54 54"
-        data-name="onborda-arrow"
+        data-name="okido-arrow"
         className="absolute w-6 h-6 origin-center"
         style={getArrowStyle(finalPlacement)}
         aria-hidden="true"
@@ -1189,7 +1189,7 @@ const Onborda: React.FC<OnbordaProps> = ({
       id: descriptionId,
     },
   };
-  const headless = useMemo<OnbordaHeadlessHelpers>(
+  const headless = useMemo<OkidoHeadlessHelpers>(
     () => ({
       progressText,
       canGoNext: totalSteps > 0,
@@ -1239,15 +1239,15 @@ const Onborda: React.FC<OnbordaProps> = ({
 
   return (
     <div
-      data-name="onborda-wrapper"
+      data-name="okido-wrapper"
       className="relative w-full"
-      data-onborda-debug={debugEnabled ? "true" : undefined}
+      data-okido-debug={debugEnabled ? "true" : undefined}
     >
-      <div data-name="onborda-site" className="block w-full">
+      <div data-name="okido-site" className="block w-full">
         {children}
       </div>
 
-      {isOnbordaVisible && activeStep && CardComponent && (
+      {isOkidoVisible && activeStep && CardComponent && (
         <Portal>
           {!interact && (
             <div className="fixed inset-0 z-[890]" onClick={handleSkip} />
@@ -1314,20 +1314,20 @@ const Onborda: React.FC<OnbordaProps> = ({
                 zIndex: 950,
               }}
               className="absolute flex flex-col pointer-events-auto"
-              data-name="onborda-card-wrapper"
+              data-name="okido-card-wrapper"
             >
               <div
                 ref={cardRef}
                 className="flex flex-col max-w-[100%] transition-all min-w-min"
-                data-name="onborda-card"
+                data-name="okido-card"
                 id={dialogId}
                 role={dialogRole}
                 aria-label={ariaLabel ?? undefined}
                 aria-labelledby={ariaLabelledBy}
                 aria-describedby={ariaDescribedBy}
                 aria-modal={ariaModal}
-                data-onborda-placement={renderedPlacement}
-                data-onborda-mobile-placement={renderedMobilePlacement}
+                data-okido-placement={renderedPlacement}
+                data-okido-mobile-placement={renderedMobilePlacement}
                 tabIndex={-1}
               >
                 {liveRegion !== "off" && (
@@ -1342,7 +1342,7 @@ const Onborda: React.FC<OnbordaProps> = ({
                   nextStep={nextStep}
                   prevStep={prevStep}
                   skipTour={handleSkip}
-                  closeOnborda={handleClose}
+                  closeOkido={handleClose}
                   isFirstStep={isFirstStep}
                   isLastStep={isLastStep}
                   targetFound={targetFound}
@@ -1359,4 +1359,4 @@ const Onborda: React.FC<OnbordaProps> = ({
   );
 };
 
-export default Onborda;
+export default Okido;

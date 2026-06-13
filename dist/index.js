@@ -1,3 +1,3 @@
 "use client";
-export { OnbordaProvider, useOnborda } from "./OnbordaContext.js";
-export { default as Onborda } from "./Onborda.js";
+export { OkidoProvider, useOkido } from "./OkidoContext.js";
+export { default as Okido } from "./Okido.js";

@@ -1,7 +1,7 @@
 "use client";
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, } from "react";
-import { useOnborda } from "./OnbordaContext.js";
+import { useOkido } from "./OkidoContext.js";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Portal } from "@radix-ui/react-portal";
@@ -92,8 +92,8 @@ const createHeadlessButtonProps = (props, action, defaults) => ({
         callButtonAction(event, props, action);
     },
 });
-const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, mobilePlacement, devWarnings, debug, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onStepsLoadStart, onStepsLoadSuccess, onStepsLoadError, onAnalyticsEvent, onTourComplete, onTourSkip, }) => {
-    const { currentTour, currentStep, setCurrentStep, isOnbordaVisible, closeOnborda, registeredTours, } = useOnborda();
+const Okido = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", shadowOpacity = "0.2", cardTransition = { ease: "anticipate", duration: 0.6 }, cardComponent: CardComponent, targetMissingPolicy = "fallback", accessibility, mobilePlacement, devWarnings, debug, onTourStart, onStepChange, onTargetMissing, onRouteTransitionStart, onRouteTransitionComplete, onRouteTransitionTimeout, onRouteTransitionError, onStepsLoadStart, onStepsLoadSuccess, onStepsLoadError, onAnalyticsEvent, onTourComplete, onTourSkip, }) => {
+    const { currentTour, currentStep, setCurrentStep, isOkidoVisible, closeOkido, registeredTours, } = useOkido();
     const [asyncTours, setAsyncTours] = useState([]);
     const [viewportWidth, setViewportWidth] = useState(() => getViewportWidth());
     const propTours = Array.isArray(steps) ? steps : asyncTours;
@@ -134,14 +134,14 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         };
         debugOptions?.onEvent?.(debugEvent);
         if (debugShouldLog) {
-            console.debug(`[Onborda] ${event.message}`, event.data ?? "");
+            console.debug(`[Okido] ${event.message}`, event.data ?? "");
         }
     }, [debugEnabled, debugOptions, debugShouldLog]);
     const warnDev = useCallback((key, message, data) => {
         if (!shouldShowDevWarnings || devWarningKeysRef.current.has(key))
             return;
         devWarningKeysRef.current.add(key);
-        console.warn(`Onborda: ${message}`, data ?? "");
+        console.warn(`Okido: ${message}`, data ?? "");
         emitDebug({
             type: "dev_warning",
             message,
@@ -182,7 +182,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             if (!isActive)
                 return;
             if (!Array.isArray(loadedTours)) {
-                throw new Error("Onborda steps loader must resolve to an array of tours.");
+                throw new Error("Okido steps loader must resolve to an array of tours.");
             }
             setAsyncTours(loadedTours);
             onStepsLoadSuccess?.(loadedTours);
@@ -269,7 +269,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
                 updatePointerPosition(reference);
             }
         }),
-        open: isOnbordaVisible && !!activeStep,
+        open: isOkidoVisible && !!activeStep,
         middleware: floatingMiddleware,
     });
     const cleanupMutationObserver = useCallback(() => {
@@ -325,7 +325,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         }
     }, []);
     const syncActiveElement = useCallback(() => {
-        if (!isOnbordaVisible || !activeStep) {
+        if (!isOkidoVisible || !activeStep) {
             clearActiveElement();
             setTargetStatus("unknown");
             return;
@@ -349,7 +349,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         activeStep,
         applyActiveElementStyle,
         clearActiveElement,
-        isOnbordaVisible,
+        isOkidoVisible,
         querySelector,
         refs,
         restoreActiveElementStyle,
@@ -392,8 +392,8 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             emitAnalytics({ type: "tour_complete", tour: currentTour });
         }
         cleanupMutationObserver();
-        closeOnborda();
-    }, [cleanupMutationObserver, closeOnborda, currentTour, emitAnalytics, onTourComplete]);
+        closeOkido();
+    }, [cleanupMutationObserver, closeOkido, currentTour, emitAnalytics, onTourComplete]);
     const handleSkip = useCallback(() => {
         if (currentTour) {
             if (onTourSkip)
@@ -407,11 +407,11 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             });
         }
         cleanupMutationObserver();
-        closeOnborda();
+        closeOkido();
     }, [
         activeStep,
         cleanupMutationObserver,
-        closeOnborda,
+        closeOkido,
         currentStep,
         currentTour,
         currentTourSteps,
@@ -420,12 +420,12 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     ]);
     const handleClose = useCallback(() => {
         cleanupMutationObserver();
-        closeOnborda();
-    }, [cleanupMutationObserver, closeOnborda]);
+        closeOkido();
+    }, [cleanupMutationObserver, closeOkido]);
     // 1. Lifecycle Hook: onTourStart
     const tourStartedRef = useRef(null);
     useEffect(() => {
-        if (isOnbordaVisible && currentTour) {
+        if (isOkidoVisible && currentTour) {
             if (tourStartedRef.current !== currentTour) {
                 tourStartedRef.current = currentTour;
                 if (onTourStart)
@@ -436,9 +436,9 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         else {
             tourStartedRef.current = null;
         }
-    }, [currentTour, emitAnalytics, isOnbordaVisible, onTourStart]);
+    }, [currentTour, emitAnalytics, isOkidoVisible, onTourStart]);
     useEffect(() => {
-        if (!isOnbordaVisible || !currentTour)
+        if (!isOkidoVisible || !currentTour)
             return;
         if (!currentTourSteps) {
             warnDev(`missing-tour:${currentTour}`, `Tour "${currentTour}" is active but no matching tour is registered.`, { currentTour, availableTours });
@@ -447,11 +447,11 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         if (currentTourSteps.length === 0) {
             warnDev(`empty-tour:${currentTour}`, `Tour "${currentTour}" has no renderable steps.`, { currentTour });
         }
-    }, [availableTours, currentTour, currentTourSteps, isOnbordaVisible, warnDev]);
+    }, [availableTours, currentTour, currentTourSteps, isOkidoVisible, warnDev]);
     // 2. Lifecycle Hook: onStepChange
     const lastFiredStepRef = useRef(null);
     useEffect(() => {
-        if (isOnbordaVisible && currentTour && currentTourSteps) {
+        if (isOkidoVisible && currentTour && currentTourSteps) {
             const step = currentTourSteps[currentStep];
             if (step && lastFiredStepRef.current !== currentStep) {
                 lastFiredStepRef.current = currentStep;
@@ -474,7 +474,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         currentTour,
         currentTourSteps,
         emitAnalytics,
-        isOnbordaVisible,
+        isOkidoVisible,
         onStepChange,
     ]);
     // Target element tracking and initial scroll
@@ -486,7 +486,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     }, [syncActiveElement, restoreActiveElementStyle]);
     // keydown navigation hook
     useEffect(() => {
-        if (!isOnbordaVisible)
+        if (!isOkidoVisible)
             return;
         const handleKeyDown = (e) => {
             switch (e.key) {
@@ -515,7 +515,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
     });
     // Track the element that had focus before the tour opened and restore it on close.
     useEffect(() => {
-        if (!isOnbordaVisible) {
+        if (!isOkidoVisible) {
             const handleFocusIn = (event) => {
                 if (event.target instanceof HTMLElement) {
                     returnFocusRef.current = event.target;
@@ -524,13 +524,13 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
             document.addEventListener("focusin", handleFocusIn);
             return () => document.removeEventListener("focusin", handleFocusIn);
         }
-    }, [isOnbordaVisible]);
+    }, [isOkidoVisible]);
     useEffect(() => {
-        if (wasVisibleRef.current && !isOnbordaVisible) {
+        if (wasVisibleRef.current && !isOkidoVisible) {
             returnFocusRef.current?.focus();
         }
-        wasVisibleRef.current = isOnbordaVisible;
-    }, [isOnbordaVisible]);
+        wasVisibleRef.current = isOkidoVisible;
+    }, [isOkidoVisible]);
     // Clean up mutation observers, timers, and target styles on unmount
     useEffect(() => {
         return () => {
@@ -583,7 +583,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         });
         // 5-second safeguard timeout
         mutationTimeoutRef.current = setTimeout(() => {
-            console.warn(`Onborda: Element with selector "${targetSelector}" was not found within 5 seconds.`);
+            console.warn(`Okido: Element with selector "${targetSelector}" was not found within 5 seconds.`);
             observer.disconnect();
             mutationObserverRef.current = null;
             mutationTimeoutRef.current = null;
@@ -781,7 +781,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         setCurrentStep,
     ]);
     useEffect(() => {
-        if (!isOnbordaVisible || !currentTour || !activeStep) {
+        if (!isOkidoVisible || !currentTour || !activeStep) {
             lastMissingTargetRef.current = null;
             return;
         }
@@ -818,7 +818,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         currentTourSteps,
         emitAnalytics,
         handleSkip,
-        isOnbordaVisible,
+        isOkidoVisible,
         onTargetMissing,
         skipMissingStep,
         targetMissingPolicy,
@@ -871,7 +871,7 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         return base;
     };
     const CardArrow = () => {
-        return (_jsx("svg", { ref: arrowRef, viewBox: "0 0 54 54", "data-name": "onborda-arrow", className: "absolute w-6 h-6 origin-center", style: getArrowStyle(finalPlacement), "aria-hidden": "true", children: _jsx("path", { id: "triangle", d: "M27 27L0 0V54L27 27Z", fill: "currentColor" }) }));
+        return (_jsx("svg", { ref: arrowRef, viewBox: "0 0 54 54", "data-name": "okido-arrow", className: "absolute w-6 h-6 origin-center", style: getArrowStyle(finalPlacement), "aria-hidden": "true", children: _jsx("path", { id: "triangle", d: "M27 27L0 0V54L27 27Z", fill: "currentColor" }) }));
     };
     const pointerPadding = activeStep?.pointerPadding ?? 30;
     const pointerPadOffset = pointerPadding / 2;
@@ -968,9 +968,9 @@ const Onborda = ({ children, interact = false, steps, shadowRgb = "0, 0, 0", sha
         left: "50%",
         transform: "translate(-50%, -50%)",
     };
-    return (_jsxs("div", { "data-name": "onborda-wrapper", className: "relative w-full", "data-onborda-debug": debugEnabled ? "true" : undefined, children: [_jsx("div", { "data-name": "onborda-site", className: "block w-full", children: children }), isOnbordaVisible && activeStep && CardComponent && (_jsxs(Portal, { children: [!interact && (_jsx("div", { className: "fixed inset-0 z-[890]", onClick: handleSkip })), _jsxs(motion.svg, { className: "fixed inset-0 w-full h-full z-[900] pointer-events-none", initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.3 }, "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("mask", { id: maskId, children: [_jsx("rect", { width: "100%", height: "100%", fill: "white" }), pointerPosition && (activeStep.spotlightShape === "circle" ? (_jsx(motion.circle, { cx: pointerPosition.x + pointerPosition.width / 2, cy: pointerPosition.y + pointerPosition.height / 2, r: Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset, fill: "black", transition: cardTransition })) : (_jsx(motion.rect, { x: pointerPosition.x - pointerPadOffset, y: pointerPosition.y - pointerPadOffset, width: pointerPosition.width + pointerPadding, height: pointerPosition.height + pointerPadding, rx: pointerRadius, ry: pointerRadius, fill: "black", transition: cardTransition })))] }) }), _jsx("rect", { width: "100%", height: "100%", fill: `rgba(${shadowRgb}, ${shadowOpacity})`, mask: `url(#${maskId})`, className: "pointer-events-auto" })] }), _jsx(FloatingFocusManager, { context: context, modal: !interact, initialFocus: 0, returnFocus: returnFocusRef, restoreFocus: true, closeOnFocusOut: false, children: _jsx("div", { ref: refs.setFloating, style: {
+    return (_jsxs("div", { "data-name": "okido-wrapper", className: "relative w-full", "data-okido-debug": debugEnabled ? "true" : undefined, children: [_jsx("div", { "data-name": "okido-site", className: "block w-full", children: children }), isOkidoVisible && activeStep && CardComponent && (_jsxs(Portal, { children: [!interact && (_jsx("div", { className: "fixed inset-0 z-[890]", onClick: handleSkip })), _jsxs(motion.svg, { className: "fixed inset-0 w-full h-full z-[900] pointer-events-none", initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.3 }, "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("mask", { id: maskId, children: [_jsx("rect", { width: "100%", height: "100%", fill: "white" }), pointerPosition && (activeStep.spotlightShape === "circle" ? (_jsx(motion.circle, { cx: pointerPosition.x + pointerPosition.width / 2, cy: pointerPosition.y + pointerPosition.height / 2, r: Math.max(pointerPosition.width, pointerPosition.height) / 2 + pointerPadOffset, fill: "black", transition: cardTransition })) : (_jsx(motion.rect, { x: pointerPosition.x - pointerPadOffset, y: pointerPosition.y - pointerPadOffset, width: pointerPosition.width + pointerPadding, height: pointerPosition.height + pointerPadding, rx: pointerRadius, ry: pointerRadius, fill: "black", transition: cardTransition })))] }) }), _jsx("rect", { width: "100%", height: "100%", fill: `rgba(${shadowRgb}, ${shadowOpacity})`, mask: `url(#${maskId})`, className: "pointer-events-auto" })] }), _jsx(FloatingFocusManager, { context: context, modal: !interact, initialFocus: 0, returnFocus: returnFocusRef, restoreFocus: true, closeOnFocusOut: false, children: _jsx("div", { ref: refs.setFloating, style: {
                                 ...(useFloatingCardPosition ? floatingStyles : fallbackFloatingStyles),
                                 zIndex: 950,
-                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "onborda-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "onborda-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, "data-onborda-placement": renderedPlacement, "data-onborda-mobile-placement": renderedMobilePlacement, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOnborda: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: useFloatingCardPosition ? _jsx(CardArrow, {}) : null, a11y: cardA11y, headless: headless })] }) }) })] }))] }));
+                            }, className: "absolute flex flex-col pointer-events-auto", "data-name": "okido-card-wrapper", children: _jsxs("div", { ref: cardRef, className: "flex flex-col max-w-[100%] transition-all min-w-min", "data-name": "okido-card", id: dialogId, role: dialogRole, "aria-label": ariaLabel ?? undefined, "aria-labelledby": ariaLabelledBy, "aria-describedby": ariaDescribedBy, "aria-modal": ariaModal, "data-okido-placement": renderedPlacement, "data-okido-mobile-placement": renderedMobilePlacement, tabIndex: -1, children: [liveRegion !== "off" && (_jsx("span", { className: "sr-only", "aria-live": liveRegion, "aria-atomic": "true", children: progressText })), _jsx(CardComponent, { step: activeStep, currentStep: currentStep, totalSteps: totalSteps, nextStep: nextStep, prevStep: prevStep, skipTour: handleSkip, closeOkido: handleClose, isFirstStep: isFirstStep, isLastStep: isLastStep, targetFound: targetFound, arrow: useFloatingCardPosition ? _jsx(CardArrow, {}) : null, a11y: cardA11y, headless: headless })] }) }) })] }))] }));
 };
-export default Onborda;
+export default Okido;

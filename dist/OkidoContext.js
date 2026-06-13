@@ -1,11 +1,11 @@
 "use client";
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, } from "react";
-const OnbordaContext = createContext(undefined);
-const useOnborda = () => {
-    const context = useContext(OnbordaContext);
+const OkidoContext = createContext(undefined);
+const useOkido = () => {
+    const context = useContext(OkidoContext);
     if (context === undefined) {
-        throw new Error("useOnborda must be used within an OnbordaProvider");
+        throw new Error("useOkido must be used within an OkidoProvider");
     }
     return context;
 };
@@ -17,7 +17,7 @@ const upsertTours = (currentTours, nextTours) => {
     });
     return Array.from(tourMap.values());
 };
-const defaultProgressStorageKey = "onborda:progress";
+const defaultProgressStorageKey = "okido:progress";
 const getBrowserStorage = () => {
     if (typeof window === "undefined" || !window.localStorage)
         return null;
@@ -64,7 +64,7 @@ const parsePersistedProgress = (value) => {
             return null;
         if (parsed.currentStep < 0)
             return null;
-        if (typeof parsed.isOnbordaVisible !== "boolean")
+        if (typeof parsed.isOkidoVisible !== "boolean")
             return null;
         if (typeof parsed.updatedAt !== "number")
             return null;
@@ -72,7 +72,7 @@ const parsePersistedProgress = (value) => {
             version: 1,
             currentTour: parsed.currentTour ?? null,
             currentStep: parsed.currentStep,
-            isOnbordaVisible: parsed.isOnbordaVisible,
+            isOkidoVisible: parsed.isOkidoVisible,
             updatedAt: parsed.updatedAt,
         };
     }
@@ -104,10 +104,10 @@ const removePersistedProgress = (storage, storageKey) => {
         // Storage can fail in private browsing or when quota is exceeded.
     }
 };
-const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledCurrentTour, currentStep: controlledCurrentStep, isOnbordaVisible: controlledIsOnbordaVisible, defaultCurrentTour = null, defaultCurrentStep = 0, defaultIsOnbordaVisible = false, progressPersistence = false, onCurrentTourChange, onCurrentStepChange, onOpenChange, onStateChange, }) => {
+const OkidoProvider = ({ children, initialTours = [], currentTour: controlledCurrentTour, currentStep: controlledCurrentStep, isOkidoVisible: controlledIsOkidoVisible, defaultCurrentTour = null, defaultCurrentStep = 0, defaultIsOkidoVisible = false, progressPersistence = false, onCurrentTourChange, onCurrentStepChange, onOpenChange, onStateChange, }) => {
     const [uncontrolledCurrentTour, setUncontrolledCurrentTour] = useState(defaultCurrentTour);
     const [uncontrolledCurrentStep, setUncontrolledCurrentStep] = useState(defaultCurrentStep);
-    const [uncontrolledIsOnbordaVisible, setUncontrolledIsOnbordaVisible] = useState(defaultIsOnbordaVisible);
+    const [uncontrolledIsOkidoVisible, setUncontrolledIsOkidoVisible] = useState(defaultIsOkidoVisible);
     const [registeredTours, setRegisteredTours] = useState(initialTours);
     const progressConfig = useMemo(() => getProgressPersistenceConfig(progressPersistence), [progressPersistence]);
     const [hasRestoredProgress, setHasRestoredProgress] = useState(!progressConfig.enabled || !progressConfig.restore);
@@ -117,19 +117,19 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
     const currentStep = controlledCurrentStep !== undefined
         ? controlledCurrentStep
         : uncontrolledCurrentStep;
-    const isOnbordaVisible = controlledIsOnbordaVisible !== undefined
-        ? controlledIsOnbordaVisible
-        : uncontrolledIsOnbordaVisible;
+    const isOkidoVisible = controlledIsOkidoVisible !== undefined
+        ? controlledIsOkidoVisible
+        : uncontrolledIsOkidoVisible;
     const delayTimeoutRef = useRef(null);
     const stateRef = useRef({
         currentTour,
         currentStep,
-        isOnbordaVisible,
+        isOkidoVisible,
     });
     const controlRef = useRef({
         currentTour: controlledCurrentTour !== undefined,
         currentStep: controlledCurrentStep !== undefined,
-        isOnbordaVisible: controlledIsOnbordaVisible !== undefined,
+        isOkidoVisible: controlledIsOkidoVisible !== undefined,
     });
     const callbackRef = useRef({
         onCurrentTourChange,
@@ -138,12 +138,12 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
         onStateChange,
     });
     const progressConfigRef = useRef(progressConfig);
-    stateRef.current = { currentTour, currentStep, isOnbordaVisible };
+    stateRef.current = { currentTour, currentStep, isOkidoVisible };
     progressConfigRef.current = progressConfig;
     controlRef.current = {
         currentTour: controlledCurrentTour !== undefined,
         currentStep: controlledCurrentStep !== undefined,
-        isOnbordaVisible: controlledIsOnbordaVisible !== undefined,
+        isOkidoVisible: controlledIsOkidoVisible !== undefined,
     };
     callbackRef.current = {
         onCurrentTourChange,
@@ -162,9 +162,9 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
         if (hasStateKey(patch, "currentStep") && !controlled.currentStep) {
             setUncontrolledCurrentStep(nextState.currentStep);
         }
-        if (hasStateKey(patch, "isOnbordaVisible") &&
-            !controlled.isOnbordaVisible) {
-            setUncontrolledIsOnbordaVisible(nextState.isOnbordaVisible);
+        if (hasStateKey(patch, "isOkidoVisible") &&
+            !controlled.isOkidoVisible) {
+            setUncontrolledIsOkidoVisible(nextState.isOkidoVisible);
         }
         if (hasStateKey(patch, "currentTour") &&
             previousState.currentTour !== nextState.currentTour) {
@@ -174,9 +174,9 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
             previousState.currentStep !== nextState.currentStep) {
             callbacks.onCurrentStepChange?.(nextState.currentStep);
         }
-        if (hasStateKey(patch, "isOnbordaVisible") &&
-            previousState.isOnbordaVisible !== nextState.isOnbordaVisible) {
-            callbacks.onOpenChange?.(nextState.isOnbordaVisible);
+        if (hasStateKey(patch, "isOkidoVisible") &&
+            previousState.isOkidoVisible !== nextState.isOkidoVisible) {
+            callbacks.onOpenChange?.(nextState.isOkidoVisible);
         }
         stateRef.current = nextState;
         callbacks.onStateChange?.(nextState);
@@ -210,22 +210,22 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
         if (delay) {
             delayTimeoutRef.current = setTimeout(() => {
                 delayTimeoutRef.current = null;
-                updateState({ currentStep: step, isOnbordaVisible: true });
+                updateState({ currentStep: step, isOkidoVisible: true });
             }, delay);
             return;
         }
-        updateState({ currentStep: step, isOnbordaVisible: true });
+        updateState({ currentStep: step, isOkidoVisible: true });
     }, [clearDelayedStep, updateState]);
-    const closeOnborda = useCallback(() => {
+    const closeOkido = useCallback(() => {
         clearDelayedStep();
-        updateState({ currentTour: null, isOnbordaVisible: false });
+        updateState({ currentTour: null, isOkidoVisible: false });
     }, [clearDelayedStep, updateState]);
-    const startOnborda = useCallback((tourName) => {
+    const startOkido = useCallback((tourName) => {
         clearDelayedStep();
         updateState({
             currentTour: tourName,
             currentStep: 0,
-            isOnbordaVisible: true,
+            isOkidoVisible: true,
         });
     }, [clearDelayedStep, updateState]);
     useEffect(() => clearDelayedStep, [clearDelayedStep]);
@@ -239,7 +239,7 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
             updateState({
                 currentTour: restoredProgress.currentTour,
                 currentStep: restoredProgress.currentStep,
-                isOnbordaVisible: restoredProgress.isOnbordaVisible,
+                isOkidoVisible: restoredProgress.isOkidoVisible,
             });
         }
         setHasRestoredProgress(true);
@@ -258,7 +258,7 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
             version: 1,
             currentTour,
             currentStep,
-            isOnbordaVisible,
+            isOkidoVisible,
             updatedAt: Date.now(),
         };
         writePersistedProgress(progressConfig.storage, progressConfig.storageKey, progress);
@@ -266,7 +266,7 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
         currentStep,
         currentTour,
         hasRestoredProgress,
-        isOnbordaVisible,
+        isOkidoVisible,
         progressConfig.enabled,
         progressConfig.storage,
         progressConfig.storageKey,
@@ -275,27 +275,27 @@ const OnbordaProvider = ({ children, initialTours = [], currentTour: controlledC
         currentTour,
         currentStep,
         setCurrentStep,
-        closeOnborda,
-        startOnborda,
+        closeOkido,
+        startOkido,
         clearPersistedProgress,
         registeredTours,
         registerTour,
         registerTours,
         unregisterTour,
-        isOnbordaVisible,
+        isOkidoVisible,
     }), [
         clearPersistedProgress,
-        closeOnborda,
+        closeOkido,
         currentStep,
         currentTour,
-        isOnbordaVisible,
+        isOkidoVisible,
         registeredTours,
         registerTour,
         registerTours,
         setCurrentStep,
-        startOnborda,
+        startOkido,
         unregisterTour,
     ]);
-    return (_jsx(OnbordaContext.Provider, { value: contextValue, children: children }));
+    return (_jsx(OkidoContext.Provider, { value: contextValue, children: children }));
 };
-export { OnbordaProvider, useOnborda };
+export { OkidoProvider, useOkido };

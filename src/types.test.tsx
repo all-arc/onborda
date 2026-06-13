@@ -2,23 +2,23 @@ import React from "react";
 import { describe, expectTypeOf, it } from "vitest";
 import type {
   CardComponentProps,
-  OnbordaAccessibilityContext,
-  OnbordaAccessibilityOptions,
-  OnbordaAnalyticsEvent,
-  OnbordaCardAccessibilityProps,
-  OnbordaDebugEvent,
-  OnbordaDebugOptions,
-  OnbordaHeadlessHelpers,
-  OnbordaMobilePlacement,
-  OnbordaMobilePlacementOptions,
-  OnbordaMobilePlacementPreset,
-  OnbordaPlacementSide,
-  OnbordaPersistedProgress,
-  OnbordaProgressPersistence,
-  OnbordaProgressStorage,
-  OnbordaProps,
-  OnbordaProviderProps,
-  OnbordaState,
+  OkidoAccessibilityContext,
+  OkidoAccessibilityOptions,
+  OkidoAnalyticsEvent,
+  OkidoCardAccessibilityProps,
+  OkidoDebugEvent,
+  OkidoDebugOptions,
+  OkidoHeadlessHelpers,
+  OkidoMobilePlacement,
+  OkidoMobilePlacementOptions,
+  OkidoMobilePlacementPreset,
+  OkidoPlacementSide,
+  OkidoPersistedProgress,
+  OkidoProgressPersistence,
+  OkidoProgressStorage,
+  OkidoProps,
+  OkidoProviderProps,
+  OkidoState,
   RouteTransition,
   RouteTransitionComplete,
   RouteTransitionDirection,
@@ -35,28 +35,28 @@ describe("public types", () => {
   it("requires a card component and exposes expanded card props", () => {
     expectTypeOf<CardComponentProps>().toMatchTypeOf<{
       skipTour: () => void;
-      closeOnborda: () => void;
+      closeOkido: () => void;
       isFirstStep: boolean;
       isLastStep: boolean;
       targetFound: boolean;
       arrow?: React.ReactElement | null;
-      a11y: OnbordaCardAccessibilityProps;
-      headless: OnbordaHeadlessHelpers;
+      a11y: OkidoCardAccessibilityProps;
+      headless: OkidoHeadlessHelpers;
     }>();
 
-    expectTypeOf<OnbordaProps>().toMatchTypeOf<{
+    expectTypeOf<OkidoProps>().toMatchTypeOf<{
       steps?: Tour[] | TourResolver;
       cardComponent: React.ComponentType<CardComponentProps>;
       targetMissingPolicy?: TargetMissingPolicy;
-      accessibility?: OnbordaAccessibilityOptions;
-      mobilePlacement?: OnbordaMobilePlacement;
+      accessibility?: OkidoAccessibilityOptions;
+      mobilePlacement?: OkidoMobilePlacement;
       devWarnings?: boolean;
-      debug?: boolean | OnbordaDebugOptions;
-      onTargetMissing?: OnbordaProps["onTargetMissing"];
+      debug?: boolean | OkidoDebugOptions;
+      onTargetMissing?: OkidoProps["onTargetMissing"];
       onStepsLoadStart?: () => void;
       onStepsLoadSuccess?: (tours: Tour[]) => void;
       onStepsLoadError?: (error: unknown) => void;
-      onAnalyticsEvent?: (event: OnbordaAnalyticsEvent) => void;
+      onAnalyticsEvent?: (event: OkidoAnalyticsEvent) => void;
       onRouteTransitionStart?: (transition: RouteTransition) => void;
       onRouteTransitionComplete?: (transition: RouteTransitionComplete) => void;
       onRouteTransitionTimeout?: (transition: RouteTransition) => void;
@@ -72,41 +72,41 @@ describe("public types", () => {
         placement: "bottom",
         fallbackPlacements: ["bottom", "top"],
       },
-    } satisfies OnbordaProps;
+    } satisfies OkidoProps;
 
     expectTypeOf(props.cardComponent).toEqualTypeOf<typeof Card>();
   });
 
   it("exposes controlled and uncontrolled provider props", () => {
-    expectTypeOf<OnbordaState>().toEqualTypeOf<{
+    expectTypeOf<OkidoState>().toEqualTypeOf<{
       currentTour: string | null;
       currentStep: number;
-      isOnbordaVisible: boolean;
+      isOkidoVisible: boolean;
     }>();
 
-    expectTypeOf<OnbordaProviderProps>().toMatchTypeOf<{
+    expectTypeOf<OkidoProviderProps>().toMatchTypeOf<{
       currentTour?: string | null;
       currentStep?: number;
-      isOnbordaVisible?: boolean;
+      isOkidoVisible?: boolean;
       defaultCurrentTour?: string | null;
       defaultCurrentStep?: number;
-      defaultIsOnbordaVisible?: boolean;
-      progressPersistence?: OnbordaProgressPersistence;
+      defaultIsOkidoVisible?: boolean;
+      progressPersistence?: OkidoProgressPersistence;
       onCurrentTourChange?: (tour: string | null) => void;
       onCurrentStepChange?: (step: number) => void;
       onOpenChange?: (open: boolean) => void;
-      onStateChange?: (state: OnbordaState) => void;
+      onStateChange?: (state: OkidoState) => void;
       initialTours?: Tour[];
     }>();
 
-    expectTypeOf<OnbordaProgressStorage>().toMatchTypeOf<{
+    expectTypeOf<OkidoProgressStorage>().toMatchTypeOf<{
       getItem: (key: string) => string | null;
       setItem: (key: string, value: string) => void;
       removeItem: (key: string) => void;
     }>();
 
-    expectTypeOf<OnbordaPersistedProgress>().toMatchTypeOf<
-      OnbordaState & {
+    expectTypeOf<OkidoPersistedProgress>().toMatchTypeOf<
+      OkidoState & {
         version: 1;
         updatedAt: number;
       }
@@ -120,34 +120,34 @@ describe("public types", () => {
       }
     >();
 
-    expectTypeOf<OnbordaAccessibilityOptions>().toMatchTypeOf<{
+    expectTypeOf<OkidoAccessibilityOptions>().toMatchTypeOf<{
       dialogRole?: "dialog" | "alertdialog";
-      ariaLabel?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
-      ariaLabelledBy?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
-      ariaDescribedBy?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+      ariaLabel?: string | null | ((context: OkidoAccessibilityContext) => string | null | undefined);
+      ariaLabelledBy?: string | null | ((context: OkidoAccessibilityContext) => string | null | undefined);
+      ariaDescribedBy?: string | null | ((context: OkidoAccessibilityContext) => string | null | undefined);
       ariaModal?: boolean;
       useCardLabelIds?: boolean;
-      progressText?: string | null | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+      progressText?: string | null | ((context: OkidoAccessibilityContext) => string | null | undefined);
       liveRegion?: "off" | "polite" | "assertive";
     }>();
 
-    expectTypeOf<OnbordaDebugOptions>().toMatchTypeOf<{
+    expectTypeOf<OkidoDebugOptions>().toMatchTypeOf<{
       enabled?: boolean;
       log?: boolean;
-      onEvent?: (event: OnbordaDebugEvent) => void;
+      onEvent?: (event: OkidoDebugEvent) => void;
     }>();
 
-    expectTypeOf<OnbordaHeadlessHelpers>().toMatchTypeOf<{
+    expectTypeOf<OkidoHeadlessHelpers>().toMatchTypeOf<{
       progressText: string;
       canGoNext: boolean;
       canGoPrev: boolean;
-      getNextButtonProps: OnbordaHeadlessHelpers["getNextButtonProps"];
-      getPrevButtonProps: OnbordaHeadlessHelpers["getPrevButtonProps"];
-      getSkipButtonProps: OnbordaHeadlessHelpers["getSkipButtonProps"];
-      getCloseButtonProps: OnbordaHeadlessHelpers["getCloseButtonProps"];
+      getNextButtonProps: OkidoHeadlessHelpers["getNextButtonProps"];
+      getPrevButtonProps: OkidoHeadlessHelpers["getPrevButtonProps"];
+      getSkipButtonProps: OkidoHeadlessHelpers["getSkipButtonProps"];
+      getCloseButtonProps: OkidoHeadlessHelpers["getCloseButtonProps"];
     }>();
 
-    expectTypeOf<OnbordaPlacementSide>().toEqualTypeOf<
+    expectTypeOf<OkidoPlacementSide>().toEqualTypeOf<
       | "top"
       | "bottom"
       | "left"
@@ -162,23 +162,23 @@ describe("public types", () => {
       | "right-bottom"
     >();
 
-    expectTypeOf<OnbordaMobilePlacementPreset>().toEqualTypeOf<
+    expectTypeOf<OkidoMobilePlacementPreset>().toEqualTypeOf<
       "auto" | "top" | "bottom" | "center"
     >();
 
-    expectTypeOf<OnbordaMobilePlacementOptions>().toMatchTypeOf<{
+    expectTypeOf<OkidoMobilePlacementOptions>().toMatchTypeOf<{
       breakpoint?: number;
-      placement?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
-      fallbackPlacements?: OnbordaPlacementSide[];
+      placement?: OkidoPlacementSide | OkidoMobilePlacementPreset;
+      fallbackPlacements?: OkidoPlacementSide[];
       offset?: number;
       shiftPadding?: number;
     }>();
 
     expectTypeOf<Tour["steps"][number]>().toMatchTypeOf<{
-      mobileSide?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
+      mobileSide?: OkidoPlacementSide | OkidoMobilePlacementPreset;
     }>();
 
-    expectTypeOf<OnbordaContextType>().toMatchTypeOf<{
+    expectTypeOf<OkidoContextType>().toMatchTypeOf<{
       registeredTours: Tour[];
       registerTour: (tour: Tour) => () => void;
       registerTours: (tours: Tour[]) => () => void;

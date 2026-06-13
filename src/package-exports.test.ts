@@ -22,13 +22,13 @@ describe("package export metadata", () => {
         types: "./dist/index.d.ts",
         import: "./dist/index.js",
       },
-      "./onborda": {
-        types: "./dist/Onborda.d.ts",
-        import: "./dist/Onborda.js",
+      "./okido": {
+        types: "./dist/Okido.d.ts",
+        import: "./dist/Okido.js",
       },
       "./context": {
-        types: "./dist/OnbordaContext.d.ts",
-        import: "./dist/OnbordaContext.js",
+        types: "./dist/OkidoContext.d.ts",
+        import: "./dist/OkidoContext.js",
       },
       "./types": {
         types: "./dist/types/index.d.ts",

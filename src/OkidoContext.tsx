@@ -11,26 +11,26 @@ import React, {
 
 // Types
 import {
-  OnbordaContextType,
-  OnbordaPersistedProgress,
-  OnbordaProgressPersistence,
-  OnbordaProgressStorage,
-  OnbordaProviderProps,
-  OnbordaState,
+  OkidoContextType,
+  OkidoPersistedProgress,
+  OkidoProgressPersistence,
+  OkidoProgressStorage,
+  OkidoProviderProps,
+  OkidoState,
   Tour,
 } from "./types/index.js";
 
-const OnbordaContext = createContext<OnbordaContextType | undefined>(undefined);
+const OkidoContext = createContext<OkidoContextType | undefined>(undefined);
 
-const useOnborda = () => {
-  const context = useContext(OnbordaContext);
+const useOkido = () => {
+  const context = useContext(OkidoContext);
   if (context === undefined) {
-    throw new Error("useOnborda must be used within an OnbordaProvider");
+    throw new Error("useOkido must be used within an OkidoProvider");
   }
   return context;
 };
 
-const hasStateKey = (patch: Partial<OnbordaState>, key: keyof OnbordaState) =>
+const hasStateKey = (patch: Partial<OkidoState>, key: keyof OkidoState) =>
   Object.prototype.hasOwnProperty.call(patch, key);
 
 const upsertTours = (currentTours: Tour[], nextTours: Tour[]) => {
@@ -41,15 +41,15 @@ const upsertTours = (currentTours: Tour[], nextTours: Tour[]) => {
   return Array.from(tourMap.values());
 };
 
-const defaultProgressStorageKey = "onborda:progress";
+const defaultProgressStorageKey = "okido:progress";
 
-const getBrowserStorage = (): OnbordaProgressStorage | null => {
+const getBrowserStorage = (): OkidoProgressStorage | null => {
   if (typeof window === "undefined" || !window.localStorage) return null;
   return window.localStorage;
 };
 
 const getProgressPersistenceConfig = (
-  progressPersistence: OnbordaProgressPersistence | undefined
+  progressPersistence: OkidoProgressPersistence | undefined
 ) => {
   if (!progressPersistence) {
     return {
@@ -79,11 +79,11 @@ const getProgressPersistenceConfig = (
 
 const parsePersistedProgress = (
   value: string | null
-): OnbordaPersistedProgress | null => {
+): OkidoPersistedProgress | null => {
   if (!value) return null;
 
   try {
-    const parsed = JSON.parse(value) as Partial<OnbordaPersistedProgress>;
+    const parsed = JSON.parse(value) as Partial<OkidoPersistedProgress>;
     if (parsed.version !== 1) return null;
     if (
       parsed.currentTour !== null &&
@@ -94,14 +94,14 @@ const parsePersistedProgress = (
     if (typeof parsed.currentStep !== "number") return null;
     if (!Number.isFinite(parsed.currentStep)) return null;
     if (parsed.currentStep < 0) return null;
-    if (typeof parsed.isOnbordaVisible !== "boolean") return null;
+    if (typeof parsed.isOkidoVisible !== "boolean") return null;
     if (typeof parsed.updatedAt !== "number") return null;
 
     return {
       version: 1,
       currentTour: parsed.currentTour ?? null,
       currentStep: parsed.currentStep,
-      isOnbordaVisible: parsed.isOnbordaVisible,
+      isOkidoVisible: parsed.isOkidoVisible,
       updatedAt: parsed.updatedAt,
     };
   } catch {
@@ -110,7 +110,7 @@ const parsePersistedProgress = (
 };
 
 const readPersistedProgress = (
-  storage: OnbordaProgressStorage | null,
+  storage: OkidoProgressStorage | null,
   storageKey: string
 ) => {
   try {
@@ -121,9 +121,9 @@ const readPersistedProgress = (
 };
 
 const writePersistedProgress = (
-  storage: OnbordaProgressStorage,
+  storage: OkidoProgressStorage,
   storageKey: string,
-  progress: OnbordaPersistedProgress
+  progress: OkidoPersistedProgress
 ) => {
   try {
     storage.setItem(storageKey, JSON.stringify(progress));
@@ -133,7 +133,7 @@ const writePersistedProgress = (
 };
 
 const removePersistedProgress = (
-  storage: OnbordaProgressStorage,
+  storage: OkidoProgressStorage,
   storageKey: string
 ) => {
   try {
@@ -143,15 +143,15 @@ const removePersistedProgress = (
   }
 };
 
-const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
+const OkidoProvider: React.FC<OkidoProviderProps> = ({
   children,
   initialTours = [],
   currentTour: controlledCurrentTour,
   currentStep: controlledCurrentStep,
-  isOnbordaVisible: controlledIsOnbordaVisible,
+  isOkidoVisible: controlledIsOkidoVisible,
   defaultCurrentTour = null,
   defaultCurrentStep = 0,
-  defaultIsOnbordaVisible = false,
+  defaultIsOkidoVisible = false,
   progressPersistence = false,
   onCurrentTourChange,
   onCurrentStepChange,
@@ -162,8 +162,8 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     useState<string | null>(defaultCurrentTour);
   const [uncontrolledCurrentStep, setUncontrolledCurrentStep] =
     useState(defaultCurrentStep);
-  const [uncontrolledIsOnbordaVisible, setUncontrolledIsOnbordaVisible] =
-    useState(defaultIsOnbordaVisible);
+  const [uncontrolledIsOkidoVisible, setUncontrolledIsOkidoVisible] =
+    useState(defaultIsOkidoVisible);
   const [registeredTours, setRegisteredTours] = useState<Tour[]>(initialTours);
   const progressConfig = useMemo(
     () => getProgressPersistenceConfig(progressPersistence),
@@ -181,21 +181,21 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     controlledCurrentStep !== undefined
       ? controlledCurrentStep
       : uncontrolledCurrentStep;
-  const isOnbordaVisible =
-    controlledIsOnbordaVisible !== undefined
-      ? controlledIsOnbordaVisible
-      : uncontrolledIsOnbordaVisible;
+  const isOkidoVisible =
+    controlledIsOkidoVisible !== undefined
+      ? controlledIsOkidoVisible
+      : uncontrolledIsOkidoVisible;
 
   const delayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stateRef = useRef<OnbordaState>({
+  const stateRef = useRef<OkidoState>({
     currentTour,
     currentStep,
-    isOnbordaVisible,
+    isOkidoVisible,
   });
   const controlRef = useRef({
     currentTour: controlledCurrentTour !== undefined,
     currentStep: controlledCurrentStep !== undefined,
-    isOnbordaVisible: controlledIsOnbordaVisible !== undefined,
+    isOkidoVisible: controlledIsOkidoVisible !== undefined,
   });
   const callbackRef = useRef({
     onCurrentTourChange,
@@ -205,12 +205,12 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
   });
   const progressConfigRef = useRef(progressConfig);
 
-  stateRef.current = { currentTour, currentStep, isOnbordaVisible };
+  stateRef.current = { currentTour, currentStep, isOkidoVisible };
   progressConfigRef.current = progressConfig;
   controlRef.current = {
     currentTour: controlledCurrentTour !== undefined,
     currentStep: controlledCurrentStep !== undefined,
-    isOnbordaVisible: controlledIsOnbordaVisible !== undefined,
+    isOkidoVisible: controlledIsOkidoVisible !== undefined,
   };
   callbackRef.current = {
     onCurrentTourChange,
@@ -219,7 +219,7 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     onStateChange,
   };
 
-  const updateState = useCallback((patch: Partial<OnbordaState>) => {
+  const updateState = useCallback((patch: Partial<OkidoState>) => {
     const previousState = stateRef.current;
     const nextState = { ...previousState, ...patch };
     const controlled = controlRef.current;
@@ -232,10 +232,10 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       setUncontrolledCurrentStep(nextState.currentStep);
     }
     if (
-      hasStateKey(patch, "isOnbordaVisible") &&
-      !controlled.isOnbordaVisible
+      hasStateKey(patch, "isOkidoVisible") &&
+      !controlled.isOkidoVisible
     ) {
-      setUncontrolledIsOnbordaVisible(nextState.isOnbordaVisible);
+      setUncontrolledIsOkidoVisible(nextState.isOkidoVisible);
     }
 
     if (
@@ -251,10 +251,10 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       callbacks.onCurrentStepChange?.(nextState.currentStep);
     }
     if (
-      hasStateKey(patch, "isOnbordaVisible") &&
-      previousState.isOnbordaVisible !== nextState.isOnbordaVisible
+      hasStateKey(patch, "isOkidoVisible") &&
+      previousState.isOkidoVisible !== nextState.isOkidoVisible
     ) {
-      callbacks.onOpenChange?.(nextState.isOnbordaVisible);
+      callbacks.onOpenChange?.(nextState.isOkidoVisible);
     }
 
     stateRef.current = nextState;
@@ -302,25 +302,25 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     if (delay) {
       delayTimeoutRef.current = setTimeout(() => {
         delayTimeoutRef.current = null;
-        updateState({ currentStep: step, isOnbordaVisible: true });
+        updateState({ currentStep: step, isOkidoVisible: true });
       }, delay);
       return;
     }
 
-    updateState({ currentStep: step, isOnbordaVisible: true });
+    updateState({ currentStep: step, isOkidoVisible: true });
   }, [clearDelayedStep, updateState]);
 
-  const closeOnborda = useCallback(() => {
+  const closeOkido = useCallback(() => {
     clearDelayedStep();
-    updateState({ currentTour: null, isOnbordaVisible: false });
+    updateState({ currentTour: null, isOkidoVisible: false });
   }, [clearDelayedStep, updateState]);
 
-  const startOnborda = useCallback((tourName: string) => {
+  const startOkido = useCallback((tourName: string) => {
     clearDelayedStep();
     updateState({
       currentTour: tourName,
       currentStep: 0,
-      isOnbordaVisible: true,
+      isOkidoVisible: true,
     });
   }, [clearDelayedStep, updateState]);
 
@@ -341,7 +341,7 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       updateState({
         currentTour: restoredProgress.currentTour,
         currentStep: restoredProgress.currentStep,
-        isOnbordaVisible: restoredProgress.isOnbordaVisible,
+        isOkidoVisible: restoredProgress.isOkidoVisible,
       });
     }
 
@@ -359,11 +359,11 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       return;
     }
 
-    const progress: OnbordaPersistedProgress = {
+    const progress: OkidoPersistedProgress = {
       version: 1,
       currentTour,
       currentStep,
-      isOnbordaVisible,
+      isOkidoVisible,
       updatedAt: Date.now(),
     };
 
@@ -376,7 +376,7 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
     currentStep,
     currentTour,
     hasRestoredProgress,
-    isOnbordaVisible,
+    isOkidoVisible,
     progressConfig.enabled,
     progressConfig.storage,
     progressConfig.storageKey,
@@ -387,35 +387,35 @@ const OnbordaProvider: React.FC<OnbordaProviderProps> = ({
       currentTour,
       currentStep,
       setCurrentStep,
-      closeOnborda,
-      startOnborda,
+      closeOkido,
+      startOkido,
       clearPersistedProgress,
       registeredTours,
       registerTour,
       registerTours,
       unregisterTour,
-      isOnbordaVisible,
+      isOkidoVisible,
     }),
     [
       clearPersistedProgress,
-      closeOnborda,
+      closeOkido,
       currentStep,
       currentTour,
-      isOnbordaVisible,
+      isOkidoVisible,
       registeredTours,
       registerTour,
       registerTours,
       setCurrentStep,
-      startOnborda,
+      startOkido,
       unregisterTour,
     ]
   );
 
   return (
-    <OnbordaContext.Provider value={contextValue}>
+    <OkidoContext.Provider value={contextValue}>
       {children}
-    </OnbordaContext.Provider>
+    </OkidoContext.Provider>
   );
 };
 
-export { OnbordaProvider, useOnborda };
+export { OkidoProvider, useOkido };

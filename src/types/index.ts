@@ -1,61 +1,61 @@
 import { Transition } from "framer-motion";
 
 // Context
-export interface OnbordaContextType {
+export interface OkidoContextType {
   currentStep: number;
   currentTour: string | null;
   setCurrentStep: (step: number, delay?: number) => void;
-  closeOnborda: () => void;
-  startOnborda: (tourName: string) => void;
+  closeOkido: () => void;
+  startOkido: (tourName: string) => void;
   clearPersistedProgress: () => void;
   registeredTours: Tour[];
   registerTour: (tour: Tour) => () => void;
   registerTours: (tours: Tour[]) => () => void;
   unregisterTour: (tourName: string) => void;
-  isOnbordaVisible: boolean;
+  isOkidoVisible: boolean;
 }
 
-export interface OnbordaState {
+export interface OkidoState {
   currentTour: string | null;
   currentStep: number;
-  isOnbordaVisible: boolean;
+  isOkidoVisible: boolean;
 }
 
-export interface OnbordaPersistedProgress extends OnbordaState {
+export interface OkidoPersistedProgress extends OkidoState {
   version: 1;
   updatedAt: number;
 }
 
-export interface OnbordaProgressStorage {
+export interface OkidoProgressStorage {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
   removeItem: (key: string) => void;
 }
 
-export interface OnbordaProgressPersistenceOptions {
+export interface OkidoProgressPersistenceOptions {
   storageKey?: string;
-  storage?: OnbordaProgressStorage;
+  storage?: OkidoProgressStorage;
   restore?: boolean;
 }
 
-export type OnbordaProgressPersistence =
+export type OkidoProgressPersistence =
   | boolean
-  | OnbordaProgressPersistenceOptions;
+  | OkidoProgressPersistenceOptions;
 
-export interface OnbordaProviderProps {
+export interface OkidoProviderProps {
   children: React.ReactNode;
   initialTours?: Tour[];
   currentTour?: string | null;
   currentStep?: number;
-  isOnbordaVisible?: boolean;
+  isOkidoVisible?: boolean;
   defaultCurrentTour?: string | null;
   defaultCurrentStep?: number;
-  defaultIsOnbordaVisible?: boolean;
-  progressPersistence?: OnbordaProgressPersistence;
+  defaultIsOkidoVisible?: boolean;
+  progressPersistence?: OkidoProgressPersistence;
   onCurrentTourChange?: (tour: string | null) => void;
   onCurrentStepChange?: (step: number) => void;
   onOpenChange?: (open: boolean) => void;
-  onStateChange?: (state: OnbordaState) => void;
+  onStateChange?: (state: OkidoState) => void;
 }
 
 export interface StepConditionContext {
@@ -68,7 +68,7 @@ export type StepCondition =
   | boolean
   | ((context: StepConditionContext) => boolean);
 
-export type OnbordaPlacementSide =
+export type OkidoPlacementSide =
   | "top"
   | "bottom"
   | "left"
@@ -82,23 +82,23 @@ export type OnbordaPlacementSide =
   | "right-top"
   | "right-bottom";
 
-export type OnbordaMobilePlacementPreset =
+export type OkidoMobilePlacementPreset =
   | "auto"
   | "top"
   | "bottom"
   | "center";
 
-export interface OnbordaMobilePlacementOptions {
+export interface OkidoMobilePlacementOptions {
   breakpoint?: number;
-  placement?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
-  fallbackPlacements?: OnbordaPlacementSide[];
+  placement?: OkidoPlacementSide | OkidoMobilePlacementPreset;
+  fallbackPlacements?: OkidoPlacementSide[];
   offset?: number;
   shiftPadding?: number;
 }
 
-export type OnbordaMobilePlacement =
-  | OnbordaMobilePlacementPreset
-  | OnbordaMobilePlacementOptions;
+export type OkidoMobilePlacement =
+  | OkidoMobilePlacementPreset
+  | OkidoMobilePlacementOptions;
 
 // Step
 export interface Step {
@@ -108,8 +108,8 @@ export interface Step {
   content: React.ReactNode;
   selector: string;
   // Options
-  side?: OnbordaPlacementSide;
-  mobileSide?: OnbordaPlacementSide | OnbordaMobilePlacementPreset;
+  side?: OkidoPlacementSide;
+  mobileSide?: OkidoPlacementSide | OkidoMobilePlacementPreset;
   showControls?: boolean;
   pointerPadding?: number;
   pointerRadius?: number;
@@ -147,7 +147,7 @@ export interface RouteTransitionComplete extends RouteTransition {
   targetFound: boolean;
 }
 
-export interface OnbordaAccessibilityContext {
+export interface OkidoAccessibilityContext {
   step: Step;
   currentStep: number;
   totalSteps: number;
@@ -157,23 +157,23 @@ export interface OnbordaAccessibilityContext {
   targetFound: boolean;
 }
 
-export type OnbordaA11yText =
+export type OkidoA11yText =
   | string
   | null
-  | ((context: OnbordaAccessibilityContext) => string | null | undefined);
+  | ((context: OkidoAccessibilityContext) => string | null | undefined);
 
-export interface OnbordaAccessibilityOptions {
+export interface OkidoAccessibilityOptions {
   dialogRole?: "dialog" | "alertdialog";
-  ariaLabel?: OnbordaA11yText;
-  ariaLabelledBy?: OnbordaA11yText;
-  ariaDescribedBy?: OnbordaA11yText;
+  ariaLabel?: OkidoA11yText;
+  ariaLabelledBy?: OkidoA11yText;
+  ariaDescribedBy?: OkidoA11yText;
   ariaModal?: boolean;
   useCardLabelIds?: boolean;
-  progressText?: OnbordaA11yText;
+  progressText?: OkidoA11yText;
   liveRegion?: "off" | "polite" | "assertive";
 }
 
-export interface OnbordaCardAccessibilityProps {
+export interface OkidoCardAccessibilityProps {
   dialogId: string;
   titleId: string;
   descriptionId: string;
@@ -186,10 +186,10 @@ export interface OnbordaCardAccessibilityProps {
   };
 }
 
-export type OnbordaHeadlessButtonProps =
+export type OkidoHeadlessButtonProps =
   React.ButtonHTMLAttributes<HTMLButtonElement>;
 
-export interface OnbordaHeadlessHelpers {
+export interface OkidoHeadlessHelpers {
   progressText: string;
   canGoNext: boolean;
   canGoPrev: boolean;
@@ -199,20 +199,20 @@ export interface OnbordaHeadlessHelpers {
   isLastStep: boolean;
   targetFound: boolean;
   getNextButtonProps: (
-    props?: OnbordaHeadlessButtonProps
-  ) => OnbordaHeadlessButtonProps;
+    props?: OkidoHeadlessButtonProps
+  ) => OkidoHeadlessButtonProps;
   getPrevButtonProps: (
-    props?: OnbordaHeadlessButtonProps
-  ) => OnbordaHeadlessButtonProps;
+    props?: OkidoHeadlessButtonProps
+  ) => OkidoHeadlessButtonProps;
   getSkipButtonProps: (
-    props?: OnbordaHeadlessButtonProps
-  ) => OnbordaHeadlessButtonProps;
+    props?: OkidoHeadlessButtonProps
+  ) => OkidoHeadlessButtonProps;
   getCloseButtonProps: (
-    props?: OnbordaHeadlessButtonProps
-  ) => OnbordaHeadlessButtonProps;
+    props?: OkidoHeadlessButtonProps
+  ) => OkidoHeadlessButtonProps;
 }
 
-export type OnbordaAnalyticsEventType =
+export type OkidoAnalyticsEventType =
   | "tour_start"
   | "tour_complete"
   | "tour_skip"
@@ -228,8 +228,8 @@ export type OnbordaAnalyticsEventType =
   | "steps_load_success"
   | "steps_load_error";
 
-export interface OnbordaAnalyticsEvent {
-  type: OnbordaAnalyticsEventType;
+export interface OkidoAnalyticsEvent {
+  type: OkidoAnalyticsEventType;
   tour?: string | null;
   stepIndex?: number;
   step?: Step;
@@ -239,40 +239,40 @@ export interface OnbordaAnalyticsEvent {
   timestamp: number;
 }
 
-export type OnbordaDebugEventType =
+export type OkidoDebugEventType =
   | "analytics"
   | "dev_warning"
   | "target"
   | "steps";
 
-export interface OnbordaDebugEvent {
-  type: OnbordaDebugEventType;
+export interface OkidoDebugEvent {
+  type: OkidoDebugEventType;
   message: string;
   data?: unknown;
   timestamp: number;
 }
 
-export interface OnbordaDebugOptions {
+export interface OkidoDebugOptions {
   enabled?: boolean;
   log?: boolean;
-  onEvent?: (event: OnbordaDebugEvent) => void;
+  onEvent?: (event: OkidoDebugEvent) => void;
 }
 
-// Onborda
-export interface OnbordaProps {
+// Okido
+export interface OkidoProps {
   children: React.ReactNode;
   interact?: boolean;
   steps?: Tour[] | TourResolver;
-  showOnborda?: boolean;
+  showOkido?: boolean;
   shadowRgb?: string;
   shadowOpacity?: string;
   cardTransition?: Transition;
   cardComponent: React.ComponentType<CardComponentProps>;
   targetMissingPolicy?: TargetMissingPolicy;
-  accessibility?: OnbordaAccessibilityOptions;
-  mobilePlacement?: OnbordaMobilePlacement;
+  accessibility?: OkidoAccessibilityOptions;
+  mobilePlacement?: OkidoMobilePlacement;
   devWarnings?: boolean;
-  debug?: boolean | OnbordaDebugOptions;
+  debug?: boolean | OkidoDebugOptions;
   // Callbacks
   onTourStart?: (tour: string) => void;
   onStepChange?: (tour: string, stepIndex: number, step: Step) => void;
@@ -284,7 +284,7 @@ export interface OnbordaProps {
   onStepsLoadStart?: () => void;
   onStepsLoadSuccess?: (tours: Tour[]) => void;
   onStepsLoadError?: (error: unknown) => void;
-  onAnalyticsEvent?: (event: OnbordaAnalyticsEvent) => void;
+  onAnalyticsEvent?: (event: OkidoAnalyticsEvent) => void;
   onTourComplete?: (tour: string) => void;
   onTourSkip?: (tour: string, currentStep: number) => void;
 }
@@ -297,11 +297,11 @@ export interface CardComponentProps {
   nextStep: () => void;
   prevStep: () => void;
   skipTour: () => void;
-  closeOnborda: () => void;
+  closeOkido: () => void;
   isFirstStep: boolean;
   isLastStep: boolean;
   targetFound: boolean;
   arrow?: React.ReactElement | null;
-  a11y: OnbordaCardAccessibilityProps;
-  headless: OnbordaHeadlessHelpers;
+  a11y: OkidoCardAccessibilityProps;
+  headless: OkidoHeadlessHelpers;
 }

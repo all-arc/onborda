@@ -4,8 +4,8 @@
 
 This repository is a TypeScript React/Next.js library for onboarding tours. Source files live in `src/`:
 
-- `src/Onborda.tsx` contains the main tour overlay component and positioning logic.
-- `src/OnbordaContext.tsx` provides `OnbordaProvider` and the `useOnborda` hook.
+- `src/Okido.tsx` contains the main tour overlay component and positioning logic.
+- `src/OkidoContext.tsx` provides `OkidoProvider` and the `useOkido` hook.
 - `src/types/index.ts` defines the public types exported by the package.
 - `src/index.ts` is the package entrypoint.
 
@@ -27,7 +27,7 @@ pnpm start
 
 ## Coding Style & Naming Conventions
 
-Write strict TypeScript and React function components. Keep public types in `src/types/index.ts` and export public API from `src/index.ts`. Use PascalCase for components and interfaces such as `OnbordaProps`, camelCase for variables, callbacks, and hooks such as `useOnborda`.
+Write strict TypeScript and React function components. Keep public types in `src/types/index.ts` and export public API from `src/index.ts`. Use PascalCase for components and interfaces such as `OkidoProps`, camelCase for variables, callbacks, and hooks such as `useOkido`.
 
 Existing code uses two-space indentation, double quotes for imports/strings, semicolons, and `"use client"` for client-side React modules. There is no configured formatter or linter, so keep edits consistent with neighboring code.
 

@@ -3,12 +3,12 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Onborda from "./Onborda";
-import { OnbordaProvider, useOnborda } from "./OnbordaContext";
+import Okido from "./Okido";
+import { OkidoProvider, useOkido } from "./OkidoContext";
 import type {
   CardComponentProps,
-  OnbordaProgressStorage,
-  OnbordaState,
+  OkidoProgressStorage,
+  OkidoState,
   RouteTransition,
   RouteTransitionComplete,
   Tour,
@@ -42,7 +42,7 @@ function setViewportWidth(width: number) {
   fireEvent(window, new Event("resize"));
 }
 
-function createMemoryStorage(initialValues: Record<string, string> = {}): OnbordaProgressStorage {
+function createMemoryStorage(initialValues: Record<string, string> = {}): OkidoProgressStorage {
   const values = new Map(Object.entries(initialValues));
 
   return {
@@ -161,34 +161,34 @@ const routeMissingTargetTours: Tour[] = [
 ];
 
 function Starter({ step = 0, tour = "main" }: { step?: number; tour?: string }) {
-  const { startOnborda, setCurrentStep } = useOnborda();
+  const { startOkido, setCurrentStep } = useOkido();
 
   useEffect(() => {
-    startOnborda(tour);
+    startOkido(tour);
     if (step > 0) {
       setCurrentStep(step);
     }
-  }, [setCurrentStep, startOnborda, step, tour]);
+  }, [setCurrentStep, startOkido, step, tour]);
 
   return null;
 }
 
 function StartButton() {
-  const { startOnborda } = useOnborda();
+  const { startOkido } = useOkido();
 
   return (
-    <button type="button" onClick={() => startOnborda("main")}>
+    <button type="button" onClick={() => startOkido("main")}>
       Start tour
     </button>
   );
 }
 
 function ProgressControls() {
-  const { startOnborda, clearPersistedProgress } = useOnborda();
+  const { startOkido, clearPersistedProgress } = useOkido();
 
   return (
     <>
-      <button type="button" onClick={() => startOnborda("main")}>
+      <button type="button" onClick={() => startOkido("main")}>
         Start tour
       </button>
       <button type="button" onClick={clearPersistedProgress}>
@@ -199,7 +199,7 @@ function ProgressControls() {
 }
 
 function RegistryStarter({ tour = "registered" }: { tour?: string }) {
-  const { registerTour, startOnborda } = useOnborda();
+  const { registerTour, startOkido } = useOkido();
 
   useEffect(() => {
     const unregister = registerTour({
@@ -213,16 +213,16 @@ function RegistryStarter({ tour = "registered" }: { tour?: string }) {
       ],
     });
 
-    startOnborda(tour);
+    startOkido(tour);
 
     return unregister;
-  }, [registerTour, startOnborda, tour]);
+  }, [registerTour, startOkido, tour]);
 
   return null;
 }
 
 function RegistryControls() {
-  const { registerTour, unregisterTour, startOnborda } = useOnborda();
+  const { registerTour, unregisterTour, startOkido } = useOkido();
 
   return (
     <>
@@ -243,7 +243,7 @@ function RegistryControls() {
       >
         Register tour
       </button>
-      <button type="button" onClick={() => startOnborda("manual-registry")}>
+      <button type="button" onClick={() => startOkido("manual-registry")}>
         Start registered
       </button>
       <button type="button" onClick={() => unregisterTour("manual-registry")}>
@@ -260,7 +260,7 @@ function TestCard({
   nextStep,
   prevStep,
   skipTour,
-  closeOnborda,
+  closeOkido,
   isFirstStep,
   isLastStep,
   targetFound,
@@ -286,7 +286,7 @@ function TestCard({
       <button type="button" onClick={skipTour}>
         Skip
       </button>
-      <button type="button" onClick={closeOnborda}>
+      <button type="button" onClick={closeOkido}>
         Close
       </button>
     </section>
@@ -316,7 +316,7 @@ function HeadlessCard({ step, headless }: CardComponentProps) {
   );
 }
 
-function renderOnborda({
+function renderOkido({
   step = 0,
   interact = true,
   onTourSkip = vi.fn(),
@@ -333,12 +333,12 @@ function renderOnborda({
     onTourSkip,
     onTargetMissing,
     ...render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <button type="button">Before tour</button>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact={interact}
           cardComponent={TestCard}
@@ -347,13 +347,13 @@ function renderOnborda({
           onTargetMissing={onTargetMissing}
         >
           <Starter step={step} />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     ),
   };
 }
 
-function renderManualOnborda({
+function renderManualOkido({
   interact = false,
   onTourSkip = vi.fn(),
 }: {
@@ -363,43 +363,43 @@ function renderManualOnborda({
   return {
     onTourSkip,
     ...render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact={interact}
           cardComponent={TestCard}
           onTourSkip={onTourSkip}
         >
           <StartButton />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     ),
   };
 }
 
-function ControlledOnborda({
+function ControlledOkido({
   initialState,
   onCurrentTourChange,
   onCurrentStepChange,
   onOpenChange,
   onStateChange,
 }: {
-  initialState: OnbordaState;
+  initialState: OkidoState;
   onCurrentTourChange?: (tour: string | null) => void;
   onCurrentStepChange?: (step: number) => void;
   onOpenChange?: (open: boolean) => void;
-  onStateChange?: (state: OnbordaState) => void;
+  onStateChange?: (state: OkidoState) => void;
 }) {
   const [state, setState] = React.useState(initialState);
 
   return (
-    <OnbordaProvider
+    <OkidoProvider
       currentTour={state.currentTour}
       currentStep={state.currentStep}
-      isOnbordaVisible={state.isOnbordaVisible}
+      isOkidoVisible={state.isOkidoVisible}
       onCurrentTourChange={(tour) => {
         onCurrentTourChange?.(tour);
         setState((current) => ({ ...current, currentTour: tour }));
@@ -410,21 +410,21 @@ function ControlledOnborda({
       }}
       onOpenChange={(open) => {
         onOpenChange?.(open);
-        setState((current) => ({ ...current, isOnbordaVisible: open }));
+        setState((current) => ({ ...current, isOkidoVisible: open }));
       }}
       onStateChange={onStateChange}
     >
       <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
         Target
       </div>
-      <Onborda steps={tours} interact cardComponent={TestCard}>
+      <Okido steps={tours} interact cardComponent={TestCard}>
         <div />
-      </Onborda>
-    </OnbordaProvider>
+      </Okido>
+    </OkidoProvider>
   );
 }
 
-function renderPolicyOnborda({
+function renderPolicyOkido({
   onTourComplete = vi.fn(),
   onTargetMissing = vi.fn(),
 }: {
@@ -435,14 +435,14 @@ function renderPolicyOnborda({
     onTourComplete,
     onTargetMissing,
     ...render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
         <div id="third-target" style={{ position: "absolute", zIndex: "5" }}>
           Third target
         </div>
-        <Onborda
+        <Okido
           steps={policyTours}
           interact
           cardComponent={TestCard}
@@ -451,13 +451,13 @@ function renderPolicyOnborda({
           onTargetMissing={onTargetMissing}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     ),
   };
 }
 
-function renderRouteOnborda({
+function renderRouteOkido({
   routeSteps = routeTours,
   includeSecondTarget = true,
   onRouteTransitionStart = vi.fn(),
@@ -478,7 +478,7 @@ function renderRouteOnborda({
     onRouteTransitionTimeout,
     onRouteTransitionError,
     ...render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
@@ -487,7 +487,7 @@ function renderRouteOnborda({
             Second target
           </div>
         )}
-        <Onborda
+        <Okido
           steps={routeSteps}
           interact
           cardComponent={TestCard}
@@ -497,15 +497,15 @@ function renderRouteOnborda({
           onRouteTransitionError={onRouteTransitionError}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     ),
   };
 }
 
-describe("Onborda", () => {
+describe("Okido", () => {
   it("passes the expanded card props when the target exists", async () => {
-    renderOnborda();
+    renderOkido();
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
     expect(screen.getByText("Step 1 of 2")).toBeInTheDocument();
@@ -516,7 +516,7 @@ describe("Onborda", () => {
   });
 
   it("restores target inline styles after closing the tour", async () => {
-    renderOnborda();
+    renderOkido();
     const target = await screen.findByText("Target");
 
     expect(target).toHaveStyle({ position: "absolute", zIndex: "990" });
@@ -530,7 +530,7 @@ describe("Onborda", () => {
   });
 
   it("renders a fallback card when the target is missing", async () => {
-    const { onTargetMissing } = renderOnborda({ step: 1 });
+    const { onTargetMissing } = renderOkido({ step: 1 });
 
     expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
     expect(screen.getByText("target-missing")).toBeInTheDocument();
@@ -540,7 +540,7 @@ describe("Onborda", () => {
   });
 
   it("skips a missing target step when targetMissingPolicy is skip-step", async () => {
-    const { onTargetMissing } = renderPolicyOnborda();
+    const { onTargetMissing } = renderPolicyOkido();
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
 
@@ -552,7 +552,7 @@ describe("Onborda", () => {
   });
 
   it("skips the tour when targetMissingPolicy is skip-tour", async () => {
-    const { onTourSkip, onTargetMissing } = renderOnborda({
+    const { onTourSkip, onTargetMissing } = renderOkido({
       step: 1,
       targetMissingPolicy: "skip-tour",
     });
@@ -570,7 +570,7 @@ describe("Onborda", () => {
       onRouteTransitionComplete,
       onRouteTransitionTimeout,
       onRouteTransitionError,
-    } = renderRouteOnborda();
+    } = renderRouteOkido();
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
 
@@ -607,7 +607,7 @@ describe("Onborda", () => {
       onRouteTransitionStart,
       onRouteTransitionComplete,
       onRouteTransitionTimeout,
-    } = renderRouteOnborda({
+    } = renderRouteOkido({
       routeSteps: routeMissingTargetTours,
       includeSecondTarget: false,
     });
@@ -651,7 +651,7 @@ describe("Onborda", () => {
       throw error;
     });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { onRouteTransitionError, onRouteTransitionComplete } = renderRouteOnborda();
+    const { onRouteTransitionError, onRouteTransitionComplete } = renderRouteOkido();
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
 
@@ -671,11 +671,11 @@ describe("Onborda", () => {
 
   it("supports custom dialog labeling through card accessibility ids", async () => {
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact
           cardComponent={A11yCard}
@@ -689,8 +689,8 @@ describe("Onborda", () => {
           }}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     const dialog = await screen.findByRole("alertdialog", { name: "First step" });
@@ -702,12 +702,12 @@ describe("Onborda", () => {
 
   it("supports custom aria-label and describedby resolvers", async () => {
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <p id="external-description">External dialog description</p>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact
           cardComponent={TestCard}
@@ -717,8 +717,8 @@ describe("Onborda", () => {
           }}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     const dialog = await screen.findByRole("dialog", {
@@ -729,7 +729,7 @@ describe("Onborda", () => {
   });
 
   it("does not navigate steps with arrow keys while typing in an input", async () => {
-    renderOnborda();
+    renderOkido();
     const input = await screen.findByRole("textbox", { name: "Card input" });
 
     await userEvent.click(input);
@@ -739,7 +739,7 @@ describe("Onborda", () => {
   });
 
   it("skips the tour with Escape and restores focus", async () => {
-    const { onTourSkip } = renderManualOnborda({ interact: false });
+    const { onTourSkip } = renderManualOkido({ interact: false });
     const startButton = screen.getByRole("button", { name: "Start tour" });
 
     await userEvent.click(startButton);
@@ -757,18 +757,18 @@ describe("Onborda", () => {
 
   it("supports uncontrolled default provider state", async () => {
     render(
-      <OnbordaProvider
+      <OkidoProvider
         defaultCurrentTour="main"
         defaultCurrentStep={1}
-        defaultIsOnbordaVisible
+        defaultIsOkidoVisible
       >
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda steps={tours} interact cardComponent={TestCard}>
+        <Okido steps={tours} interact cardComponent={TestCard}>
           <div />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
@@ -780,11 +780,11 @@ describe("Onborda", () => {
     const onStateChange = vi.fn();
 
     render(
-      <ControlledOnborda
+      <ControlledOkido
         initialState={{
           currentTour: "main",
           currentStep: 0,
-          isOnbordaVisible: true,
+          isOkidoVisible: true,
         }}
         onCurrentStepChange={onCurrentStepChange}
         onStateChange={onStateChange}
@@ -799,7 +799,7 @@ describe("Onborda", () => {
     expect(onStateChange).toHaveBeenCalledWith({
       currentTour: "main",
       currentStep: 1,
-      isOnbordaVisible: true,
+      isOkidoVisible: true,
     });
     expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
   });
@@ -810,11 +810,11 @@ describe("Onborda", () => {
     const onStateChange = vi.fn();
 
     render(
-      <ControlledOnborda
+      <ControlledOkido
         initialState={{
           currentTour: "main",
           currentStep: 0,
-          isOnbordaVisible: true,
+          isOkidoVisible: true,
         }}
         onCurrentTourChange={onCurrentTourChange}
         onOpenChange={onOpenChange}
@@ -831,7 +831,7 @@ describe("Onborda", () => {
     expect(onStateChange).toHaveBeenCalledWith({
       currentTour: null,
       currentStep: 0,
-      isOnbordaVisible: false,
+      isOkidoVisible: false,
     });
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -839,19 +839,19 @@ describe("Onborda", () => {
   });
 
   it("restores uncontrolled progress from persisted storage", async () => {
-    const storageKey = "onborda:test-progress";
+    const storageKey = "okido:test-progress";
     const storage = createMemoryStorage({
       [storageKey]: JSON.stringify({
         version: 1,
         currentTour: "main",
         currentStep: 1,
-        isOnbordaVisible: true,
+        isOkidoVisible: true,
         updatedAt: Date.now(),
       }),
     });
 
     render(
-      <OnbordaProvider
+      <OkidoProvider
         progressPersistence={{
           storage,
           storageKey,
@@ -860,21 +860,21 @@ describe("Onborda", () => {
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda steps={tours} interact cardComponent={TestCard}>
+        <Okido steps={tours} interact cardComponent={TestCard}>
           <div />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Missing step" })).toBeInTheDocument();
   });
 
   it("persists progress when the tour state changes", async () => {
-    const storageKey = "onborda:test-progress";
+    const storageKey = "okido:test-progress";
     const storage = createMemoryStorage();
 
     render(
-      <OnbordaProvider
+      <OkidoProvider
         progressPersistence={{
           storage,
           storageKey,
@@ -883,10 +883,10 @@ describe("Onborda", () => {
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda steps={tours} interact cardComponent={TestCard}>
+        <Okido steps={tours} interact cardComponent={TestCard}>
           <StartButton />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Start tour" }));
@@ -899,17 +899,17 @@ describe("Onborda", () => {
         version: 1,
         currentTour: "main",
         currentStep: 1,
-        isOnbordaVisible: true,
+        isOkidoVisible: true,
       });
     });
   });
 
   it("can clear persisted progress from the context", async () => {
-    const storageKey = "onborda:test-progress";
+    const storageKey = "okido:test-progress";
     const storage = createMemoryStorage();
 
     render(
-      <OnbordaProvider
+      <OkidoProvider
         progressPersistence={{
           storage,
           storageKey,
@@ -918,10 +918,10 @@ describe("Onborda", () => {
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda steps={tours} interact cardComponent={TestCard}>
+        <Okido steps={tours} interact cardComponent={TestCard}>
           <ProgressControls />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Start tour" }));
@@ -936,14 +936,14 @@ describe("Onborda", () => {
 
   it("supports tours registered through context", async () => {
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="registered-target" style={{ position: "absolute", zIndex: "5" }}>
           Registered target
         </div>
-        <Onborda interact cardComponent={TestCard}>
+        <Okido interact cardComponent={TestCard}>
           <RegistryStarter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Registered step" })).toBeInTheDocument();
@@ -951,14 +951,14 @@ describe("Onborda", () => {
 
   it("supports manual tour registry updates", async () => {
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="registered-target" style={{ position: "absolute", zIndex: "5" }}>
           Registered target
         </div>
-        <Onborda interact cardComponent={TestCard}>
+        <Okido interact cardComponent={TestCard}>
           <RegistryControls />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Register tour" }));
@@ -994,17 +994,17 @@ describe("Onborda", () => {
     ];
 
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
         <div id="third-target" style={{ position: "absolute", zIndex: "5" }}>
           Third target
         </div>
-        <Onborda steps={conditionalTours} interact cardComponent={TestCard}>
+        <Okido steps={conditionalTours} interact cardComponent={TestCard}>
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Visible conditional step" })).toBeInTheDocument();
@@ -1021,11 +1021,11 @@ describe("Onborda", () => {
     const onStepsLoadSuccess = vi.fn();
 
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="async-target" style={{ position: "absolute", zIndex: "5" }}>
           Async target
         </div>
-        <Onborda
+        <Okido
           steps={async () => [
             {
               tour: "main",
@@ -1044,8 +1044,8 @@ describe("Onborda", () => {
           onStepsLoadSuccess={onStepsLoadSuccess}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Async step" })).toBeInTheDocument();
@@ -1064,8 +1064,8 @@ describe("Onborda", () => {
     const onStepsLoadError = vi.fn();
 
     render(
-      <OnbordaProvider>
-        <Onborda
+      <OkidoProvider>
+        <Okido
           steps={async () => {
             throw error;
           }}
@@ -1074,8 +1074,8 @@ describe("Onborda", () => {
           onStepsLoadError={onStepsLoadError}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     await waitFor(() => {
@@ -1088,19 +1088,19 @@ describe("Onborda", () => {
     const onAnalyticsEvent = vi.fn();
 
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact
           cardComponent={TestCard}
           onAnalyticsEvent={onAnalyticsEvent}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
@@ -1138,14 +1138,14 @@ describe("Onborda", () => {
 
   it("passes headless helpers that wire card controls", async () => {
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda steps={tours} interact cardComponent={HeadlessCard}>
+        <Okido steps={tours} interact cardComponent={HeadlessCard}>
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
@@ -1182,17 +1182,17 @@ describe("Onborda", () => {
     ];
 
     render(
-      <OnbordaProvider>
-        <Onborda steps={invalidTours} interact cardComponent={TestCard} devWarnings>
+      <OkidoProvider>
+        <Okido steps={invalidTours} interact cardComponent={TestCard} devWarnings>
           <Starter tour="invalid" />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Invalid selector" })).toBeInTheDocument();
     expect(screen.getByText("target-missing")).toBeInTheDocument();
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Onborda: Invalid selector"),
+      expect.stringContaining("Okido: Invalid selector"),
       expect.objectContaining({
         selector: "[",
       })
@@ -1206,23 +1206,23 @@ describe("Onborda", () => {
     const onDebug = vi.fn();
 
     const { container } = render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact
           cardComponent={TestCard}
           debug={{ onEvent: onDebug }}
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
-    expect(container.querySelector("[data-onborda-debug='true']")).toBeInTheDocument();
+    expect(container.querySelector("[data-okido-debug='true']")).toBeInTheDocument();
     expect(onDebug).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "analytics",
@@ -1230,7 +1230,7 @@ describe("Onborda", () => {
       })
     );
     expect(debugSpy).toHaveBeenCalledWith(
-      "[Onborda] Analytics event: tour_start",
+      "[Okido] Analytics event: tour_start",
       expect.objectContaining({
         type: "tour_start",
       })
@@ -1243,47 +1243,47 @@ describe("Onborda", () => {
     setViewportWidth(480);
 
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda steps={mobilePlacementTours} interact cardComponent={TestCard}>
+        <Okido steps={mobilePlacementTours} interact cardComponent={TestCard}>
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "Mobile placement step" })).toBeInTheDocument();
     expect(screen.getByText("arrow-present")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-placement", "top");
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-mobile-placement", "top");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-okido-placement", "top");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-okido-mobile-placement", "top");
   });
 
   it("supports the center mobile placement preset while keeping target state", async () => {
     setViewportWidth(480);
 
     render(
-      <OnbordaProvider>
+      <OkidoProvider>
         <div id="first-target" style={{ position: "absolute", zIndex: "5" }}>
           Target
         </div>
-        <Onborda
+        <Okido
           steps={tours}
           interact
           cardComponent={TestCard}
           mobilePlacement="center"
         >
           <Starter />
-        </Onborda>
-      </OnbordaProvider>
+        </Okido>
+      </OkidoProvider>
     );
 
     expect(await screen.findByRole("dialog", { name: "First step" })).toBeInTheDocument();
     expect(screen.getByText("target-found")).toBeInTheDocument();
     expect(screen.getByText("arrow-missing")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-placement", "center");
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-onborda-mobile-placement", "center");
-    expect(document.querySelector("[data-name='onborda-card-wrapper']")).toHaveStyle({
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-okido-placement", "center");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-okido-mobile-placement", "center");
+    expect(document.querySelector("[data-name='okido-card-wrapper']")).toHaveStyle({
       position: "fixed",
       top: "50%",
       left: "50%",

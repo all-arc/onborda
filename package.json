@@ -1,6 +1,6 @@
 {
   "name": "okido",
-  "version": "1.2.5",
+  "version": "1.0.0",
   "description": "Product tour library for Next.js",
   "type": "module",
   "license": "MIT",
@@ -35,13 +35,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./onborda": {
-      "types": "./dist/Onborda.d.ts",
-      "import": "./dist/Onborda.js"
+    "./okido": {
+      "types": "./dist/Okido.d.ts",
+      "import": "./dist/Okido.js"
     },
     "./context": {
-      "types": "./dist/OnbordaContext.d.ts",
-      "import": "./dist/OnbordaContext.js"
+      "types": "./dist/OkidoContext.d.ts",
+      "import": "./dist/OkidoContext.js"
     },
     "./types": {
       "types": "./dist/types/index.d.ts",
@@ -51,6 +51,8 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.json",
+    "check:deps": "node node_modules/knip/bin/knip.js --no-progress",
+    "knip": "node node_modules/knip/bin/knip.js --no-progress",
     "test": "vitest run --environment jsdom --pool forks",
     "start": "npm run build && node dist/index.js"
   },
@@ -68,6 +70,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "jsdom": "^29.1.1",
+    "knip": "^6.16.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
